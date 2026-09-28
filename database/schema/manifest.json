@@ -1,0 +1,144 @@
+{
+  "version": "V2",
+  "engine": "MySQL 8.x / InnoDB / utf8mb4",
+  "blocks": [
+    {
+      "order": 1,
+      "file": "001_core_definitivo_superarse_siga.sql",
+      "bytes": 24286,
+      "sha256": "8af2356d935f03b739b9609ff759552cf6ea14b082c7af5fbdbddd926fc374cf"
+    },
+    {
+      "order": 2,
+      "file": "002_identidad_microsoft_superarse_siga.sql",
+      "bytes": 28410,
+      "sha256": "14941624febbe45a4f7b7d84ea7ea1b3e518589452358c2fc9766bb7a11cf7cd"
+    },
+    {
+      "order": 3,
+      "file": "003_talento_humano_superarse_siga.sql",
+      "bytes": 18256,
+      "sha256": "bd352114375e4138df3819f3f4ebc870da4a39961211fcc931bb3dcca4053b61"
+    },
+    {
+      "order": 4,
+      "file": "004_admisiones_estudiantes_superarse_siga.sql",
+      "bytes": 22953,
+      "sha256": "38ea1570aa79ee7cffcf4e443661291153ed4310342870da0f3d7e5df90682ce"
+    },
+    {
+      "order": 5,
+      "file": "005_estructura_academica_superarse_siga.sql",
+      "bytes": 29078,
+      "sha256": "a289bb8d1a3d107d70d1e24b2f6d0a6d367cde95fb1946f0498bc0afe82109ce"
+    },
+    {
+      "order": 6,
+      "file": "006_periodos_oferta_academica_superarse_siga.sql",
+      "bytes": 20581,
+      "sha256": "a3653c0f161f8061c74b6f3cef49c0cb8c2851a35de4a426c401bf3ae17c7278"
+    },
+    {
+      "order": 7,
+      "file": "007_matriculas_superarse_siga.sql",
+      "bytes": 27192,
+      "sha256": "857cc2af1b85a7b943a3fd82036662042fed725407846da5056398eaeab57ea4"
+    },
+    {
+      "order": 8,
+      "file": "008_evaluacion_calificaciones_superarse_siga.sql",
+      "bytes": 49915,
+      "sha256": "eb359095873628d3b67d4140646a32011553348b01626bbd1d0a73b6dcf4a1be"
+    },
+    {
+      "order": 9,
+      "file": "009_asistencia_superarse_siga.sql",
+      "bytes": 25638,
+      "sha256": "4b71aac4cff0b19142ec97ec8bc06625bbb8605d5ae6c11f6e69092bf15c0a3c"
+    },
+    {
+      "order": 10,
+      "file": "010_financiero_superarse_siga.sql",
+      "bytes": 36924,
+      "sha256": "8c62ee455ad562dd0b13b99a512fc57cc4d18682785aec351400b36113b3bf15"
+    },
+    {
+      "order": 11,
+      "file": "011_becas_bienestar_superarse_siga.sql",
+      "bytes": 29701,
+      "sha256": "a2f2fc8eddf1dd87250ba76fd91602574ce91dc8d9082ac5627551a436c2f598"
+    },
+    {
+      "order": 12,
+      "file": "012_expediente_documental_superarse_siga.sql",
+      "bytes": 34039,
+      "sha256": "70a187aeb5933a9fada43ac23d1409dd7a364d019f37f6e6b22fe6a97468c31b"
+    },
+    {
+      "order": 13,
+      "file": "013_practicas_vinculacion_superarse_siga.sql",
+      "bytes": 32280,
+      "sha256": "6cd14855166e7b40325a39205cefc523532fdaf365796a0387fe13b77e1c1232"
+    },
+    {
+      "order": 14,
+      "file": "014_titulacion_superarse_siga.sql",
+      "bytes": 31743,
+      "sha256": "647b226420e5772c2d2ed1b1ad102f993d394834938b11c69c502cc9780cfbbf"
+    },
+    {
+      "order": 15,
+      "file": "015_encuestas_superarse_siga.sql",
+      "bytes": 25046,
+      "sha256": "d5a7f2a4a9ace6ef9705aa4735b612b2ece50d88e11a08f37508bb1ec3df6864"
+    },
+    {
+      "order": 16,
+      "file": "016_certificados_superarse_siga.sql",
+      "bytes": 31268,
+      "sha256": "02ded6830e835d5ac60040e2ade235ba37d28ac88cd635ae17faf748e5a0a5e3"
+    },
+    {
+      "order": 17,
+      "file": "017_integracion_moodle_superarse_siga.sql",
+      "bytes": 36312,
+      "sha256": "2b14908d488238e31c93c776123fb162e8e04620f4c9a5d853a932b0ce8ba82e"
+    },
+    {
+      "order": 18,
+      "file": "018_motor_automatizacion_superarse_siga.sql",
+      "bytes": 49664,
+      "sha256": "d7d00fb100b7a5322dcc58612abd8657e36c5d5f9977394007919ea0becb307b"
+    },
+    {
+      "order": 19,
+      "file": "019_notificaciones_comunicaciones_superarse_siga.sql",
+      "bytes": 37261,
+      "sha256": "f94d7ee4303712e860ac1e639966266a008d07289ffbe6cd6c88b3d72bf0f556"
+    },
+    {
+      "order": 20,
+      "file": "020_auditoria_seguridad_superarse_siga.sql",
+      "bytes": 27304,
+      "sha256": "3c69a0e4f6f3cb4faaf463d30649e7c0bdca51a38386b19dd4d0ca6a36d0ecb9"
+    },
+    {
+      "order": 21,
+      "file": "021_reportes_indicadores_superarse_siga.sql",
+      "bytes": 45833,
+      "sha256": "55419f2ae9a673ac254389bc6a33757669498281af8a35dc77095a123eb145e5"
+    },
+    {
+      "order": 22,
+      "file": "022_integracion_microsoft_365_superarse_siga.sql",
+      "bytes": 13586,
+      "sha256": "660655913863b040971b67f7df5a14821f0ed166b661df9d138ecd8804216b41"
+    },
+    {
+      "order": 23,
+      "file": "023_configuracion_sistema_parametros_superarse_siga.sql",
+      "bytes": 43819,
+      "sha256": "51dd4f547cf010b4c29c861b9c6e434e8843c78ed24eccbb0a2506ac63abc1b4"
+    }
+  ]
+}

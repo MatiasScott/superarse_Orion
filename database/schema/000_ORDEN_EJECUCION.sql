@@ -1,0 +1,31 @@
+-- ============================================================
+-- ORDEN DE EJECUCIÓN - SIGA SUPERARSE V2
+-- ============================================================
+-- Este archivo es solo una guía. Ejecutar cada script por separado.
+-- No ejecutar versiones antiguas 001_core_superarse_siga.sql ni
+-- 002_modelo_evaluacion_academica.sql.
+-- ============================================================
+
+-- 001: 001_core_definitivo_superarse_siga.sql
+-- 002: 002_identidad_microsoft_superarse_siga.sql
+-- 003: 003_talento_humano_superarse_siga.sql
+-- 004: 004_admisiones_estudiantes_superarse_siga.sql
+-- 005: 005_estructura_academica_superarse_siga.sql
+-- 006: 006_periodos_oferta_academica_superarse_siga.sql
+-- 007: 007_matriculas_superarse_siga.sql
+-- 008: 008_evaluacion_calificaciones_superarse_siga.sql
+-- 009: 009_asistencia_superarse_siga.sql
+-- 010: 010_financiero_superarse_siga.sql
+-- 011: 011_becas_bienestar_superarse_siga.sql
+-- 012: 012_expediente_documental_superarse_siga.sql
+-- 013: 013_practicas_vinculacion_superarse_siga.sql
+-- 014: 014_titulacion_superarse_siga.sql
+-- 015: 015_encuestas_superarse_siga.sql
+-- 016: 016_certificados_superarse_siga.sql
+-- 017: 017_integracion_moodle_superarse_siga.sql
+-- 018: 018_motor_automatizacion_superarse_siga.sql
+-- 019: 019_notificaciones_comunicaciones_superarse_siga.sql
+-- 020: 020_auditoria_seguridad_superarse_siga.sql
+-- 021: 021_reportes_indicadores_superarse_siga.sql
+-- 022: 022_integracion_microsoft_365_superarse_siga.sql
+-- 023: 023_configuracion_sistema_parametros_superarse_siga.sql
