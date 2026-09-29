@@ -1,0 +1,5 @@
+<?php use App\Core\Csrf;$u=rtrim($_ENV['APP_URL']??'','/');$grouped=[];foreach($permissions as $p)$grouped[$p['modulo_nombre']][]=$p;?>
+<div class="page-head"><div><small>ROL · <?=htmlspecialchars($role['codigo'])?></small><h1>Permisos de <?=htmlspecialchars($role['nombre'])?></h1></div><a href="<?=$u?>/admin/roles">Volver</a></div>
+<form method="post" action="<?=$u?>/admin/roles/permisos/save"><input type="hidden" name="_csrf" value="<?=htmlspecialchars(Csrf::token())?>"><input type="hidden" name="id" value="<?=(int)$role['id']?>">
+<?php foreach($grouped as $module=>$items):?><div class="permission-card"><h3><?=htmlspecialchars($module)?></h3><div class="check-grid"><?php foreach($items as $p):?><label class="check"><input type="checkbox" name="permisos[]" value="<?=$p['id']?>" <?=in_array((int)$p['id'],$selected,true)?'checked':''?>><span><b><?=htmlspecialchars($p['nombre'])?></b><small><code><?=htmlspecialchars($p['codigo'])?></code></small></span></label><?php endforeach;?></div></div><?php endforeach;?>
+<div class="actions"><a href="<?=$u?>/admin/roles">Cancelar</a><button class="btn">Guardar permisos</button></div></form>

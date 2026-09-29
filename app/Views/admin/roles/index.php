@@ -1,0 +1,6 @@
+<?php use App\Services\AccessService;$u=rtrim($_ENV['APP_URL']??'','/');?>
+<div class="page-head"><div><small>ADMINISTRACIÓN</small><h1>Roles</h1><p>Roles institucionales y permisos efectivos.</p></div><?php if(AccessService::can('admin.roles.crear')):?><a class="btn" href="<?=$u?>/admin/roles/form">+ Nuevo rol</a><?php endif;?></div>
+<div class="table-card"><table><thead><tr><th>Rol</th><th>Código</th><th>Perfil</th><th>Permisos</th><th>Estado</th><th></th></tr></thead><tbody>
+<?php foreach($roles as $x):?><tr><td><strong><?=htmlspecialchars($x['nombre'])?></strong><small><?=htmlspecialchars($x['descripcion']??'')?></small></td><td><code><?=htmlspecialchars($x['codigo'])?></code></td><td><?=htmlspecialchars($x['perfil_nombre']??'Global')?></td><td><?=$x['codigo']==='SUPER_ADMIN'?'GLOBAL':(int)$x['permisos']?></td><td><span class="badge <?=$x['activo']?'ok':'off'?>"><?=$x['activo']?'Activo':'Inactivo'?></span></td><td>
+<?php if(AccessService::can('admin.roles.editar')):?><a href="<?=$u?>/admin/roles/form?id=<?=$x['id']?>">Editar</a><?php endif;?>
+<?php if($x['codigo']!=='SUPER_ADMIN'&&AccessService::can('admin.roles.permisos')):?> · <a href="<?=$u?>/admin/roles/permisos?id=<?=$x['id']?>">Permisos</a><?php endif;?></td></tr><?php endforeach;?></tbody></table></div>

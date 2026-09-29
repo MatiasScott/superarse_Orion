@@ -1,0 +1,3 @@
+<?php $last=null;?><div class="page-head"><div><small>ADMINISTRACIÓN</small><h1>Permisos</h1><p>Catálogo de capacidades registradas en Orion.</p></div></div>
+<div class="table-card"><table><thead><tr><th>Módulo</th><th>Código</th><th>Permiso</th><th>Estado</th></tr></thead><tbody>
+<?php foreach($permissions as $x):?><tr><td><?=htmlspecialchars($x['modulo_nombre'])?></td><td><code><?=htmlspecialchars($x['codigo'])?></code></td><td><strong><?=htmlspecialchars($x['nombre'])?></strong><small><?=htmlspecialchars($x['descripcion']??'')?></small></td><td><span class="badge <?=$x['activo']?'ok':'off'?>"><?=$x['activo']?'Activo':'Inactivo'?></span></td></tr><?php endforeach;?></tbody></table></div>
