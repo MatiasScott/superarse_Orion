@@ -1,0 +1,1 @@
+<?php $u=rtrim($_ENV['APP_URL']??'','/');?><!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=htmlspecialchars($title??'Orion')?></title><link rel="stylesheet" href="<?=$u?>/assets/css/orion.css"></head><body class="guest"><?=$content?></body></html>
