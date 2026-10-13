@@ -1,0 +1,20 @@
+<?php
+declare(strict_types=1);
+namespace App\Services;
+use App\Integrations\Microsoft\MicrosoftGraphClient; use App\Repositories\TicProvisioningRepository; use RuntimeException;
+final class TicProvisioningService
+{
+ public function __construct(private TicProvisioningRepository $repo,private MicrosoftGraphClient $graph){}
+ public function validateCandidates(int $requestId):void{$domain=$_ENV['MICROSOFT_DOMAIN']??'superarse.edu.ec';$this->repo->generateCandidates($requestId,$domain);foreach($this->repo->usernames($requestId) as $c){try{$exists=$this->graph->userByUpn($c['email_propuesto']);$this->repo->markCandidate((int)$c['id'],$exists?'OCUPADO':'DISPONIBLE',$exists?'Existe en Microsoft Entra':'Disponible en Microsoft Entra');}catch(\Throwable $e){$this->repo->markCandidate((int)$c['id'],'ERROR',$e->getMessage());}}}
+ public function skus():array{return $this->graph->subscribedSkus();}
+ public function provision(int $requestId,int $actor,?int $licenseId=null):array{$r=$this->repo->request($requestId);if(!$r)throw new RuntimeException('Solicitud no encontrada.');if(!in_array($r['tipo_codigo'],['CREACION','AGREGAR_PERFIL'],true))throw new RuntimeException('Tipo de solicitud aún no soportado por este bloque.');$sel=$this->repo->selected($requestId);if(!$sel)throw new RuntimeException('Selecciona primero un username disponible.');$existing=$this->graph->userByUpn($sel['email_propuesto']);$temporaryPassword=null;$ms=$existing;if(!$ms){$temporaryPassword=$this->password();$ms=$this->graph->createUser(['accountEnabled'=>true,'displayName'=>$r['nombre'],'mailNickname'=>$sel['username'],'userPrincipalName'=>$sel['email_propuesto'],'usageLocation'=>'EC','givenName'=>trim($r['primer_nombre'].' '.($r['segundo_nombre']??'')),'surname'=>trim($r['primer_apellido'].' '.($r['segundo_apellido']??'')),'passwordProfile'=>['forceChangePasswordNextSignIn'=>true,'password'=>$temporaryPassword]]);}else{
+  // Recuperación idempotente: Graph pudo crear la cuenta y Orion fallar después.
+  // Solo continuamos si el UPN y el nombre visible coinciden con esta solicitud.
+  if(strcasecmp((string)($ms['userPrincipalName']??''),(string)$sel['email_propuesto'])!==0 || trim((string)($ms['displayName']??''))!==trim((string)$r['nombre'])){throw new RuntimeException('El username seleccionado ya existe en Microsoft y no coincide con esta persona. Vuelve a validar candidatos.');}
+ }
+ $license=$licenseId?$this->findLicense($licenseId):$this->repo->defaultLicenseForProfile($r['perfil_solicitado_id']?(int)$r['perfil_solicitado_id']:null);if($license){if(empty($license['sku_externo']))throw new RuntimeException('La licencia seleccionada no tiene sku_externo configurado. Sincroniza y configura el SKU antes de provisionar.');$this->graph->assignLicense((string)$ms['id'],(string)$license['sku_externo']);}
+ $local=$this->repo->provisionLocal($requestId,$ms,$sel['username'],$sel['email_propuesto'],$actor,$license?(int)$license['id']:null);return ['microsoft'=>$ms,'temporary_password'=>$temporaryPassword,'license'=>$license,'local'=>$local];}
+ public function resetPassword(int $accountId,int $actor):void{$account=$this->repo->account($accountId);if(!$account)throw new RuntimeException('Cuenta institucional no encontrada.');$password=$this->password();$oid=trim((string)($account['identificador_externo']??''));if($oid==='')throw new RuntimeException('La cuenta no tiene Object ID de Microsoft.');$this->graph->resetPassword($oid,$password);$this->repo->logAccountEvent($accountId,'PASSWORD_RESTABLECIDA',$actor,'TIC restableció la contraseña temporal y Microsoft exigirá cambio en el siguiente inicio.',['forceChangePasswordNextSignIn'=>true]);}
+ private function findLicense(int $id):?array{foreach($this->repo->licenseTypes() as $l)if((int)$l['id']===$id)return $l;throw new RuntimeException('Licencia no válida.');}
+ private function password():string{$password=trim((string)($_ENV['MICROSOFT_INITIAL_PASSWORD']??''));if($password==='')throw new RuntimeException('Configura MICROSOFT_INITIAL_PASSWORD en .env antes de crear cuentas nuevas.');return $password;}
+}

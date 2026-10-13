@@ -1,0 +1,48 @@
+<?php
+declare(strict_types=1);
+namespace App\Controllers\Admin;
+use App\Core\{Container,Csrf,Database,Request,Response,Session,View}; use App\Repositories\FinanceRepository; use App\Services\AccessService; use RuntimeException;
+final class FinanceController{
+ private function flash(string $type,string $message):void{Session::set('finance_flash',['type'=>$type,'message'=>$message]);} private function takeFlash():?array{$f=Session::get('finance_flash');Session::set('finance_flash',null);return is_array($f)?$f:null;}
+ private function repo():FinanceRepository{return new FinanceRepository(Container::get(Database::class)->connection());} private function actor():int{return(int)(Session::get('auth_user')['id']??0);} private function csrf(Request$r):void{if(!Csrf::validate((string)$r->input('_csrf')))Response::abort(419,'CSRF inválido.');}
+ public function index(Request$r):void{AccessService::require('financiero.ver');$x=$this->repo();$q=trim((string)$r->input('q'));View::render('admin/financiero/index',['title'=>'Financiero','stats'=>$x->dashboard(),'candidates'=>$x->candidates($q),'q'=>$q,'pending'=>$x->pendingPayments(),'flash'=>$this->takeFlash()]);}
+ public function tariffs(Request$r):void{AccessService::require('financiero.tarifas.gestionar');$x=$this->repo();View::render('admin/financiero/tariffs',['title'=>'Tarifas académicas','tariffs'=>$x->tariffs(),'published'=>$x->publishedTariffs(),'cat'=>$x->catalog(),'flash'=>$this->takeFlash()]);}
+ public function tariffSave(Request$r):never{$this->csrf($r);AccessService::require('financiero.tarifas.gestionar');$d=['carrera'=>(int)$r->input('carrera_id'),'malla'=>(int)$r->input('malla_id'),'nivel'=>(int)$r->input('nivel_academico_id'),'politica'=>(int)$r->input('politica_id'),'creditos'=>(float)$r->input('creditos'),'valor_credito'=>(float)$r->input('valor_credito'),'arancel'=>(float)$r->input('arancel_base'),'matricula'=>(float)$r->input('valor_matricula'),'total_nivel'=>(float)$r->input('total_nivel_oficial'),'cuotas'=>(int)$r->input('numero_cuotas'),'desde'=>(string)$r->input('vigente_desde'),'hasta'=>(string)$r->input('vigente_hasta'),'ultimo'=>$r->input('es_ultimo_nivel')!==null?1:0,'periodo'=>(int)$r->input('periodo_academico_id')];if(!$d['periodo']||!$d['carrera']||!$d['malla']||!$d['nivel']||!$d['politica']||!$d['desde']||!$d['hasta']||$d['cuotas']<1||$d['creditos']<=0||$d['valor_credito']<0||$d['arancel']<0||$d['matricula']<0||$d['total_nivel']<=0||abs($d['total_nivel']-($d['arancel']+$d['matricula']))>0.02){$this->flash('error','Completa la tarifa oficial. El total debe coincidir con arancel + matrícula.');Response::redirect('/admin/financiero/tarifas');}try{$this->repo()->saveTariff($d,$this->actor());$this->flash('success','Tarifa oficial registrada correctamente para el PAO seleccionado.');}catch(RuntimeException $e){$this->flash('error',$e->getMessage());}Response::redirect('/admin/financiero/tarifas');}
+ public function calendarSave(Request$r):never{$this->csrf($r);AccessService::require('financiero.tarifas.gestionar');$d=['periodo'=>(int)$r->input('periodo_academico_id'),'primera_inicio'=>(string)$r->input('primera_cuota_inicio'),'primera_fin'=>(string)$r->input('primera_cuota_fin'),'dia_inicio'=>(int)$r->input('dia_inicio_recurrente'),'dia_fin'=>(int)$r->input('dia_fin_recurrente')];try{$this->repo()->savePaymentCalendar($d,$this->actor());$this->flash('success','Calendario de pagos del PAO guardado correctamente.');}catch(RuntimeException $e){$this->flash('error',$e->getMessage());}Response::redirect('/admin/financiero/tarifas');}
+ public function orderCreate(Request$r):never{$this->csrf($r);AccessService::require('financiero.ordenes.generar');try{$id=$this->repo()->createOrderFromEnrollment((int)$r->input('matricula_id'),$this->actor());Response::redirect('/admin/financiero/orden?id='.$id);}catch(RuntimeException $e){$this->flash('error',$e->getMessage());Response::redirect('/admin/financiero');}}
+ public function order(Request$r):void{AccessService::require('financiero.ver');$x=$this->repo();$id=(int)$r->input('id');$o=$x->order($id);if(!$o)Response::abort(404,'Orden no encontrada.');View::render('admin/financiero/order',['title'=>'Orden de pago','order'=>$o,'installments'=>$x->installments($id),'payments'=>$x->payments($id),'catalog'=>$x->paymentCatalog(),'flash'=>$this->takeFlash()]);}
+ public function orderAnnul(Request$r):never{$this->csrf($r);AccessService::require('financiero.ordenes.generar');$id=(int)$r->input('orden_id');try{$this->repo()->annulOrder($id,trim((string)$r->input('motivo')),$this->actor());$this->flash('success','Orden anulada correctamente. Ya puede generarse una nueva orden cuando exista un tarifario válido para el PAO.');}catch(RuntimeException $e){$this->flash('error',$e->getMessage());}Response::redirect('/admin/financiero/orden?id='.$id);}
+ public function paymentRegister(Request$r):never{$this->csrf($r);AccessService::require('financiero.pagos.registrar');$file=$this->storeProof();$id=$this->repo()->registerPayment((int)$r->input('orden_id'),(int)$r->input('cuota_id'),(float)$r->input('monto'),(string)$r->input('fecha_pago'),(int)$r->input('medio_pago_id'),$file,trim((string)$r->input('referencia')),$this->actor());Response::redirect('/admin/financiero/orden?id='.(int)$r->input('orden_id').'&pago='.$id);}
+ public function paymentReview(Request$r):never{$this->csrf($r);AccessService::require('financiero.pagos.revisar');try{$this->repo()->reviewPayment((int)$r->input('pago_id'),(string)$r->input('decision'),trim((string)$r->input('observacion')),$this->actor());$this->flash('success','Comprobante revisado y aplicado correctamente.');}catch(RuntimeException $e){$this->flash('error',$e->getMessage());}Response::redirect('/admin/financiero/orden?id='.(int)$r->input('orden_id'));}
+ public function paymentProof(Request $r):never{
+  AccessService::require('financiero.ver');
+  $paymentId=(int)$r->input('pago_id');
+  if($paymentId<=0)Response::abort(404,'Comprobante no encontrado.');
+  $db=Container::get(Database::class)->connection();
+  $stmt=$db->prepare("SELECT a.ruta_relativa,a.nombre_original,a.mime_type,a.tamano_bytes,a.hash_sha256 FROM pagos p INNER JOIN archivos a ON a.id=p.comprobante_archivo_id WHERE p.id=:id LIMIT 1");
+  $stmt->execute(['id'=>$paymentId]);
+  $file=$stmt->fetch(\PDO::FETCH_ASSOC);
+  if(!$file)Response::abort(404,'Este pago no tiene comprobante asociado.');
+  $root=realpath(dirname(__DIR__,3).'/storage/uploads/financiero');
+  $relative=str_replace('\\','/',(string)$file['ruta_relativa']);
+  if(!$root||!str_starts_with($relative,'storage/uploads/financiero/'))Response::abort(404,'Archivo no disponible.');
+  $path=realpath(dirname(__DIR__,3).'/'.$relative);
+  if(!$path||!str_starts_with($path,$root.DIRECTORY_SEPARATOR)||!is_file($path)||!is_readable($path))Response::abort(404,'El comprobante no está disponible en el servidor.');
+  $mime=(new \finfo(FILEINFO_MIME_TYPE))->file($path);
+  if(!in_array($mime,['application/pdf','image/jpeg','image/png'],true)||$mime!==$file['mime_type'])Response::abort(415,'Formato de comprobante no permitido.');
+  if(!empty($file['hash_sha256'])&&!hash_equals(strtolower((string)$file['hash_sha256']),hash_file('sha256',$path)))Response::abort(409,'El archivo no coincide con su registro de integridad.');
+  $download=(string)$r->input('descargar')==='1';
+  $name=preg_replace('/[^a-zA-Z0-9._-]/','_',basename((string)$file['nombre_original']));
+  if(!$name)$name='comprobante-'. $paymentId .'.'.(['application/pdf'=>'pdf','image/jpeg'=>'jpg','image/png'=>'png'][$mime]);
+  header('Content-Type: '.$mime);
+  header('Content-Length: '.filesize($path));
+  header('Content-Disposition: '.($download?'attachment':'inline').'; filename="'.$name.'"');
+  header('X-Content-Type-Options: nosniff');
+  header('Content-Security-Policy: sandbox');
+  header('Cache-Control: private, no-store, max-age=0');
+  header('Pragma: no-cache');
+  readfile($path);
+  exit;
+ }
+ private function storeProof():int{if(!isset($_FILES['comprobante'])||($_FILES['comprobante']['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK)throw new RuntimeException('Debes adjuntar un comprobante.');$f=$_FILES['comprobante'];if((int)$f['size']>10*1024*1024)throw new RuntimeException('El comprobante supera 10 MB.');$mime=(new \finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']);$allowed=['application/pdf'=>'pdf','image/jpeg'=>'jpg','image/png'=>'png'];if(!isset($allowed[$mime]))throw new RuntimeException('El comprobante debe ser PDF, JPG o PNG.');$uuid=sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',random_int(0,65535),random_int(0,65535),random_int(0,65535),random_int(16384,20479),random_int(32768,49151),random_int(0,65535),random_int(0,65535),random_int(0,65535));$name=$uuid.'.'.$allowed[$mime];$dir=dirname(__DIR__,3).'/storage/uploads/financiero/'.date('Y/m');if(!is_dir($dir)&&!mkdir($dir,0775,true)&&!is_dir($dir))throw new RuntimeException('No se pudo crear el directorio de comprobantes.');$dest=$dir.'/'.$name;if(!move_uploaded_file($f['tmp_name'],$dest))throw new RuntimeException('No se pudo guardar el comprobante.');$db=Container::get(Database::class)->connection();$s=$db->prepare("INSERT INTO archivos(uuid,nombre_original,nombre_interno,ruta_relativa,extension,mime_type,tamano_bytes,hash_sha256,almacenamiento_codigo,creado_por_usuario_id) VALUES(:u,:o,:n,:r,:e,:m,:t,:h,'PRINCIPAL',:usr)");$s->execute(['u'=>$uuid,'o'=>basename((string)$f['name']),'n'=>$name,'r'=>'storage/uploads/financiero/'.date('Y/m').'/'.$name,'e'=>$allowed[$mime],'m'=>$mime,'t'=>$f['size'],'h'=>hash_file('sha256',$dest),'usr'=>$this->actor()]);return(int)$db->lastInsertId();}
+}

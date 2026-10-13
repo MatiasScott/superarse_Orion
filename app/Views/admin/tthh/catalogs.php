@@ -1,0 +1,7 @@
+<?php use App\Core\Csrf;$u=rtrim($_ENV['APP_URL']??'','/'); ?>
+<div class="page-head"><div><small>TALENTO HUMANO</small><h1>Catálogos básicos</h1><p>Configura cargos, unidades organizacionales y sedes antes de registrar personal.</p></div><a href="<?=$u?>/admin/tthh">← Personal</a></div>
+<div class="catalog-grid">
+<?php foreach(['cargo'=>['Cargos',$catalogs['positions']],'unidad'=>['Unidades / Áreas',$catalogs['units']],'sede'=>['Sedes',$catalogs['campuses']]] as $type=>$pack):?>
+<div class="form-card"><h3><?=$pack[0]?></h3><div class="catalog-list"><?php foreach($pack[1] as $x):?><div><strong><?=htmlspecialchars($x['nombre'])?></strong><small><?=htmlspecialchars($x['codigo'])?></small></div><?php endforeach;?><?php if(!$pack[1]):?><p class="muted">Sin registros todavía.</p><?php endif;?></div>
+<form method="post" action="<?=$u?>/admin/tthh/catalogos/save" class="mini-form"><input type="hidden" name="_csrf" value="<?=htmlspecialchars(Csrf::token())?>"><input type="hidden" name="tipo" value="<?=$type?>"><label>Código<input name="codigo" required maxlength="60" placeholder="Ej. COORD_TICS"></label><label>Nombre<input name="nombre" required maxlength="160"></label><label>Descripción<input name="descripcion" maxlength="255"></label><?php if($type==='cargo'):?><div class="inline-checks"><label><input type="checkbox" name="es_docente" value="1"> Docente</label><label><input type="checkbox" name="es_administrativo" value="1"> Administrativo</label></div><?php endif;?><button class="btn" type="submit">Agregar</button></form></div>
+<?php endforeach;?></div>

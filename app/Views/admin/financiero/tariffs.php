@@ -1,0 +1,38 @@
+<?php $u=rtrim($_ENV['APP_URL']??'','/'); use App\Core\Csrf; ?>
+<div class="page-head"><div><span class="eyebrow">FINANCIERO · CONFIGURACIÓN</span><h1>Tarifas académicas por PAO</h1><p>Cada tarifa se vincula de forma explícita a un período, carrera, malla y nivel. Las tarifas históricas no se reemplazan.</p></div><a href="<?=$u?>/admin/financiero">← Financiero</a></div>
+<?php if(!empty($flash)):?><div class="alert <?=($flash['type']??'')==='error'?'alert-danger':'alert-success'?>"><?=htmlspecialchars((string)($flash['message']??''))?></div><?php endif;?>
+<section class="card"><h2>Nueva tarifa oficial</h2><p><small>Registra exactamente los valores publicados por la institución. Orion no reconstruye el arancel multiplicando créditos × valor por crédito.</small></p>
+<form method="post" action="<?=$u?>/admin/financiero/tarifas/save" class="form-grid" id="tarifa-form">
+<input type="hidden" name="_csrf" value="<?=htmlspecialchars(Csrf::token())?>">
+<label>Período académico<select name="periodo_academico_id" id="periodo" required><option value="">Seleccione...</option><?php foreach($cat['periods'] as$pa):?><option value="<?=$pa['id']?>" data-inicio="<?=$pa['fecha_inicio']?>" data-fin="<?=$pa['fecha_fin']?>"><?=htmlspecialchars($pa['nombre'].' · '.$pa['fecha_inicio'].' → '.$pa['fecha_fin'])?></option><?php endforeach;?></select></label>
+<label>Carrera<select name="carrera_id" id="carrera" required><option value="">Seleccione...</option><?php foreach($cat['careers'] as$x):?><option value="<?=$x['id']?>"><?=htmlspecialchars($x['nombre'])?></option><?php endforeach;?></select></label>
+<label>Malla<select name="malla_id" id="malla" required disabled><option value="">Seleccione primero una carrera...</option><?php foreach($cat['curricula'] as$x):?><option value="<?=$x['id']?>" data-carrera="<?=$x['carrera_id']?>"><?=htmlspecialchars($x['codigo'].' · '.$x['nombre'])?></option><?php endforeach;?></select></label>
+<label>Nivel<select name="nivel_academico_id" required><option value="">Seleccione...</option><?php foreach($cat['levels'] as$x):?><option value="<?=$x['id']?>"><?=htmlspecialchars($x['nombre'])?></option><?php endforeach;?></select></label>
+<label>Política financiera<select name="politica_id" required><?php foreach($cat['policies'] as$x):?><option value="<?=$x['id']?>"><?=htmlspecialchars($x['nombre'].' v'.$x['numero_version'])?></option><?php endforeach;?></select></label>
+<label>Créditos del nivel<input type="number" step="0.01" min="0" name="creditos" required></label>
+<label>Valor por crédito<input type="number" step="0.01" min="0" name="valor_credito" required></label>
+<label>Arancel oficial<input type="number" step="0.01" min="0" name="arancel_base" id="arancel" required></label>
+<label>Matrícula<input type="number" step="0.01" min="0" name="valor_matricula" id="matricula" required></label>
+<label>Total oficial del nivel<input type="number" step="0.01" min="0.01" name="total_nivel_oficial" id="total" required><small id="total-ayuda">Debe coincidir con Arancel + Matrícula.</small></label>
+<label>Número de cuotas<input type="number" min="1" name="numero_cuotas" value="6" required></label>
+<label>Vigente desde<input type="date" name="vigente_desde" id="desde" required></label>
+<label>Vigente hasta<input type="date" name="vigente_hasta" id="hasta" required></label>
+<label><input type="checkbox" name="es_ultimo_nivel" value="1"> Último nivel / titulación</label>
+<div><button class="btn" type="submit">Guardar tarifa</button></div>
+</form></section>
+
+<section class="card"><h2>Calendario de pagos por PAO</h2><p><small>La primera ventana se define explícitamente. Desde la segunda cuota Orion avanza mes a mes usando los días recurrentes configurados.</small></p>
+<form method="post" action="<?=$u?>/admin/financiero/calendario/save" class="form-grid">
+<input type="hidden" name="_csrf" value="<?=htmlspecialchars(Csrf::token())?>">
+<label>Período académico<select name="periodo_academico_id" required><option value="">Seleccione...</option><?php foreach($cat['periods'] as$pa):?><option value="<?=$pa['id']?>"><?=htmlspecialchars($pa['nombre'])?></option><?php endforeach;?></select></label>
+<label>Inicio primera cuota<input type="date" name="primera_cuota_inicio" required></label>
+<label>Fin primera cuota<input type="date" name="primera_cuota_fin" required></label>
+<label>Día inicio cuotas siguientes<input type="number" min="1" max="28" name="dia_inicio_recurrente" value="1" required></label>
+<label>Día fin cuotas siguientes<input type="number" min="1" max="28" name="dia_fin_recurrente" value="10" required></label>
+<div><button class="btn" type="submit">Guardar calendario</button></div></form>
+<?php if(!empty($cat['calendars'])):?><div class="table-scroll"><table><thead><tr><th>PAO</th><th>Primera cuota</th><th>Cuotas siguientes</th></tr></thead><tbody><?php foreach($cat['calendars'] as$cp):?><tr><td><?=htmlspecialchars($cp['periodo_codigo'].' · '.$cp['periodo_nombre'])?></td><td><?=$cp['primera_cuota_inicio']?> → <?=$cp['primera_cuota_fin']?></td><td>Días <?=$cp['dia_inicio_recurrente']?> → <?=$cp['dia_fin_recurrente']?> de cada mes</td></tr><?php endforeach;?></tbody></table></div><?php endif;?>
+</section>
+<section class="card"><h2>Tarifas configuradas</h2><div class="table-scroll"><table><thead><tr><th>PAO</th><th>Carrera / malla</th><th>Nivel</th><th>Créditos</th><th>Valor crédito</th><th>Arancel</th><th>Matrícula</th><th>Total oficial</th><th>Cuotas</th><th>Vigencia</th></tr></thead><tbody><?php foreach($tariffs as$t):?><tr><td><?=htmlspecialchars(($t['periodo_codigo']??'SIN PAO').(!empty($t['periodo_nombre'])?' · '.$t['periodo_nombre']:''))?></td><td><?=htmlspecialchars($t['carrera'])?><br><small><?=htmlspecialchars($t['malla_codigo'])?></small></td><td><?=htmlspecialchars($t['nivel'])?></td><td><?=number_format((float)$t['creditos_totales_nivel'],2)?></td><td>$<?=number_format((float)($t['valor_credito']??0),2)?></td><td>$<?=number_format((float)$t['arancel_base'],2)?></td><td>$<?=number_format((float)$t['valor_matricula'],2)?></td><td><strong>$<?=number_format((float)($t['total_nivel_oficial']??0),2)?></strong></td><td><?=$t['numero_cuotas']?></td><td><?=$t['vigente_desde']?> → <?=$t['vigente_hasta']?:'abierta'?></td></tr><?php endforeach;?><?php if(!$tariffs):?><tr><td colspan="10">Todavía no existen tarifas académicas.</td></tr><?php endif;?></tbody></table></div></section>
+<script>
+(()=>{const c=document.getElementById('carrera'),m=document.getElementById('malla'),p=document.getElementById('periodo'),d=document.getElementById('desde'),h=document.getElementById('hasta'),a=document.getElementById('arancel'),vm=document.getElementById('matricula'),t=document.getElementById('total'),help=document.getElementById('total-ayuda');const all=[...m.options].slice(1).map(o=>({v:o.value,txt:o.textContent,c:o.dataset.carrera}));function mallas(){const v=c.value;m.innerHTML='<option value="">Seleccione...</option>';all.filter(x=>x.c===v).forEach(x=>{const o=document.createElement('option');o.value=x.v;o.textContent=x.txt;m.appendChild(o)});m.disabled=!v}function fechas(){const o=p.options[p.selectedIndex];if(o&&o.value){d.value=o.dataset.inicio||'';h.value=o.dataset.fin||''}}function total(){const av=parseFloat(a.value||'0'),mv=parseFloat(vm.value||'0'),tv=parseFloat(t.value||'0'),calc=Math.round((av+mv)*100)/100;help.textContent=t.value&&Math.abs(tv-calc)>0.02?'El total no coincide: Arancel + Matrícula = $'+calc.toFixed(2):'Debe coincidir con Arancel + Matrícula.'}c.addEventListener('change',mallas);p.addEventListener('change',fechas);a.addEventListener('input',total);vm.addEventListener('input',total);t.addEventListener('input',total);})();
+</script>

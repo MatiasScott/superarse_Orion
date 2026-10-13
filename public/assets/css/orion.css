@@ -390,3 +390,615 @@ td a {
     flex-direction: column;
   }
 }
+
+.head-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.btn.secondary {
+  background: white;
+  color: var(--blue);
+  border: 1px solid var(--border);
+}
+.empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 32px;
+}
+.check.wide {
+  margin-top: 10px;
+}
+.block-label {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.form-card textarea {
+  resize: vertical;
+}
+.form-card h3:first-of-type {
+  margin-top: 0;
+}
+@media (max-width: 600px) {
+  .head-actions {
+    width: 100%;
+  }
+  .head-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.catalog-grid .form-card h3 {
+  margin-top: 0;
+}
+.catalog-list {
+  display: grid;
+  gap: 8px;
+  max-height: 240px;
+  overflow: auto;
+  margin-bottom: 20px;
+}
+.catalog-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.catalog-list small,
+.muted {
+  color: var(--muted);
+}
+.mini-form {
+  display: grid;
+  gap: 10px;
+}
+.mini-form label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.inline-checks {
+  display: flex;
+  gap: 16px;
+}
+.inline-checks label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.inline-checks input {
+  width: auto;
+}
+@media (max-width: 1000px) {
+  .catalog-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* Orion v0.5.1 additions - append to orion.css if desired */
+.candidate-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.candidate,
+.license-map {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid #e8edf2;
+}
+.candidate small,
+.license-map small,
+td small {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+.license-map {
+  grid-template-columns: minmax(220px, 1fr) minmax(320px, 2fr) auto;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 10px;
+}
+.detail-grid dt {
+  font-weight: 700;
+}
+.detail-grid dd {
+  margin: 0;
+}
+.one-time-secret {
+  margin: 20px 0;
+  padding: 18px;
+  border: 1px solid #d9e3ea;
+  border-radius: 14px;
+}
+.one-time-secret code {
+  display: block;
+  font-size: 1.35rem;
+  margin: 12px 0;
+  word-break: break-all;
+}
+.alert.error {
+  padding: 14px;
+  border: 1px solid #e2b8b8;
+  border-radius: 12px;
+  margin: 14px 0;
+}
+.form-row {
+  display: flex;
+  gap: 14px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.form-row label {
+  min-width: 320px;
+}
+.success-card {
+  max-width: 760px;
+}
+/* Orion v0.5.2 - modal + licencia automática */
+.auto-license {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+  margin: 16px 0 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fafbfd;
+}
+.auto-license span,
+.auto-license small {
+  color: var(--muted);
+}
+.orion-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.orion-modal.is-open {
+  display: flex;
+}
+.orion-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(3px);
+}
+.orion-modal-dialog {
+  position: relative;
+  width: min(520px, 100%);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 26px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+.orion-modal-dialog h2 {
+  margin: 7px 0 10px;
+}
+.orion-modal-x {
+  position: absolute;
+  right: 16px;
+  top: 14px;
+  border: 0;
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted);
+}
+.modal-summary {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 9px;
+  padding: 14px 0;
+  margin: 14px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.modal-summary span {
+  color: var(--muted);
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.modal-open {
+  overflow: hidden;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* v0.5.3 TIC administration */
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.filter-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+}
+.filter-tab {
+  padding: 9px 13px;
+  border: 1px solid var(--border, #dfe4ea);
+  border-radius: 999px;
+  text-decoration: none;
+  color: inherit;
+  background: #fff;
+}
+.filter-tab.active {
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+.table-scroll {
+  overflow-x: auto;
+}
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+.cell-stack small {
+  display: block;
+  opacity: 0.7;
+}
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px;
+  text-align: center;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.detail-list {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 10px 16px;
+}
+.detail-list dt {
+  font-weight: 700;
+  opacity: 0.72;
+}
+.detail-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.danger-soft {
+  border-left: 4px solid #d88a2e;
+}
+.result-card {
+  max-width: 760px;
+  margin: 0 auto;
+}
+.alert.success {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(48, 158, 143, 0.12);
+}
+@media (max-width: 800px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .detail-list {
+    grid-template-columns: 1fr;
+  }
+  .page-head {
+    gap: 12px;
+  }
+  .actions {
+    width: 100%;
+  }
+}
+/* v0.6.0 Admisiones + Estudiantes */
+.search-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 14px;
+}
+.search-bar input {
+  flex: 1;
+}
+.page-head.compact {
+  margin-bottom: 10px;
+}
+.page-head.compact h2 {
+  margin: 0;
+}
+.badge.on {
+  background: #eaf7f2;
+  color: #167657;
+}
+.badge {
+  display: inline-flex;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Orion v0.6.2 - ficha socioeconomica */
+.socio-form-card {
+  scroll-margin-top: 24px;
+}
+.socio-grid > label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.socio-grid > label > span,
+.block-label > span {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.socio-grid select,
+.socio-grid input {
+  width: 100%;
+}
+.socio-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.socio-detail-dialog {
+  max-width: 720px;
+}
+.socio-detail-dialog .detail-list {
+  max-height: 58vh;
+  overflow: auto;
+  padding-right: 6px;
+}
+.page-head.compact {
+  align-items: center;
+  margin-bottom: 14px;
+}
+.page-head.compact h2 {
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .socio-checks {
+    grid-template-columns: 1fr;
+  }
+}
+/* Orion v0.6.3 - renovacion semestral socioeconomica */
+.socio-form-card .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 20px;
+}
+.socio-form-card .form-grid label {
+  margin: 0;
+}
+.socio-form-card .form-grid label span {
+  margin-bottom: 2px;
+}
+.badge.warn {
+  background: #fff4df;
+  color: #9a5b00;
+}
+@media (max-width: 700px) {
+  .socio-form-card .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Orion v0.8.1 - anexar al final de public/assets/css/orion.css */
+.page-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.academic-history {
+  display: grid;
+  gap: 20px;
+}
+.history-trajectory {
+  padding: 0;
+  overflow: hidden;
+}
+.history-trajectory-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.history-trajectory-head h2 {
+  margin: 5px 0;
+}
+.history-trajectory-head p {
+  margin: 0;
+  color: var(--muted);
+}
+.history-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  color: var(--muted);
+}
+.history-period {
+  border-bottom: 1px solid var(--border);
+}
+.history-period:last-child {
+  border-bottom: 0;
+}
+.history-period > summary,
+.history-subject > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.history-period > summary::-webkit-details-marker,
+.history-subject > summary::-webkit-details-marker {
+  display: none;
+}
+.history-period > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 17px 24px;
+  background: #fafbfd;
+}
+.history-period > summary div {
+  display: grid;
+  gap: 4px;
+}
+.history-period > summary small,
+.history-period > summary > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.history-subjects {
+  padding: 12px 18px 18px;
+}
+.history-subject {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  margin-top: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+.history-subject > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  padding: 15px 17px;
+}
+.subject-main {
+  display: grid;
+  gap: 5px;
+}
+.subject-main small {
+  color: var(--muted);
+}
+.subject-grade {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 10px;
+  align-items: center;
+  text-align: right;
+}
+.subject-grade b {
+  font-size: 20px;
+}
+.subject-grade small {
+  grid-column: 2;
+  color: var(--muted);
+}
+.badge.history {
+  background: #eef3ff;
+  color: #315ca8;
+}
+.subject-body {
+  padding: 0 17px 17px;
+  border-top: 1px solid var(--border);
+}
+.grade-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 15px 0;
+}
+.grade-summary > div {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fafbfd;
+  display: grid;
+  gap: 5px;
+}
+.grade-summary span {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.grade-summary strong {
+  font-size: 17px;
+}
+.history-note {
+  padding: 12px;
+  border-radius: 10px;
+  background: #fff8e8;
+}
+.grade-detail-table th,
+.grade-detail-table td {
+  padding: 11px 12px;
+}
+@media (max-width: 800px) {
+  .history-trajectory-head {
+    flex-direction: column;
+  }
+  .history-meta {
+    align-items: flex-start;
+  }
+  .grade-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .history-subject > summary {
+    align-items: flex-start;
+  }
+  .subject-grade {
+    min-width: 100px;
+  }
+}
+@media (max-width: 520px) {
+  .grade-summary {
+    grid-template-columns: 1fr;
+  }
+  .history-period > summary {
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .history-subject > summary {
+    flex-direction: column;
+  }
+  .subject-grade {
+    text-align: left;
+    grid-template-columns: auto auto;
+  }
+  .subject-grade small {
+    grid-column: 2;
+  }
+}
