@@ -19,10 +19,19 @@ final class AcademicEnrollmentController
     {
         AccessService::require('academico.matriculas.ver');
         $q=trim((string)$r->input('q')); $repo=$this->repo();
+        $filters = [
+            'buscar'=>trim((string)$r->input('buscar')),
+            'estado'=>trim((string)$r->input('estado')),
+            'periodo'=>(int)$r->input('periodo'),
+            'carrera'=>(int)$r->input('carrera'),
+        ];
         View::render('admin/academico/matriculas/index',[
             'title'=>'Matrículas y renovación','q'=>$q,
             'students'=>$q!==''?$repo->searchStudents($q):[],
             'pending'=>AccessService::can('academico.matriculas.confirmar')?$repo->pendingAcademicConfirmations():[],
+            'history'=>$repo->enrollmentHistory($filters,(int)$r->input('pagina',1)),
+            'historyFilters'=>$repo->enrollmentHistoryFilters(),
+            'selectedFilters'=>$filters,
             'flash'=>$this->takeFlash(),
         ]);
     }

@@ -524,6 +524,58 @@ final class AcademicEnrollmentRepository
             throw $e;
         }
     }
+    /** Historial administrativo paginado, con parámetros enlazados y filtros permitidos. */
+    public function enrollmentHistory(array $filters, int $page = 1, int $perPage = 25): array
+    {
+        $page = max(1, $page);
+        $perPage = max(1, min(100, $perPage));
+        $where = [];
+        $params = [];
+        $q = trim((string)($filters['buscar'] ?? ''));
+        if ($q !== '') {
+            $like = '%' . $q . '%';
+            $where[] = "(m.numero_matricula LIKE :q1 OR e.codigo_estudiante LIKE :q2 OR pe.numero_identificacion LIKE :q3 OR CONCAT_WS(' ',pe.primer_nombre,pe.segundo_nombre,pe.primer_apellido,pe.segundo_apellido) LIKE :q4)";
+            foreach (['q1','q2','q3','q4'] as $key) $params[$key] = $like;
+        }
+        $estado = trim((string)($filters['estado'] ?? ''));
+        if ($estado !== '') { $where[] = 'em.codigo = :estado'; $params['estado'] = $estado; }
+        $periodo = (int)($filters['periodo'] ?? 0);
+        if ($periodo > 0) { $where[] = 'm.periodo_academico_id = :periodo'; $params['periodo'] = $periodo; }
+        $carrera = (int)($filters['carrera'] ?? 0);
+        if ($carrera > 0) { $where[] = 'ec.carrera_id = :carrera'; $params['carrera'] = $carrera; }
+        $from = " FROM matriculas m
+            JOIN estados_matricula em ON em.id=m.estado_matricula_id
+            JOIN periodos_academicos p ON p.id=m.periodo_academico_id
+            JOIN estudiante_carreras ec ON ec.id=m.estudiante_carrera_id
+            JOIN estudiantes e ON e.id=ec.estudiante_id
+            JOIN personas pe ON pe.id=e.persona_id
+            JOIN carreras c ON c.id=ec.carrera_id ";
+        $condition = $where ? ' WHERE '.implode(' AND ', $where) : '';
+        $count = $this->db->prepare('SELECT COUNT(*)'.$from.$condition);
+        $count->execute($params);
+        $total = (int)$count->fetchColumn();
+        $pages = max(1, (int)ceil($total/$perPage));
+        $page = min($page, $pages);
+        $offset = ($page-1)*$perPage;
+        $sql = "SELECT m.id,m.numero_matricula,em.codigo estado_codigo,em.nombre estado,
+            p.nombre periodo,c.nombre carrera,e.codigo_estudiante,
+            CONCAT_WS(' ',pe.primer_nombre,pe.segundo_nombre,pe.primer_apellido,pe.segundo_apellido) estudiante,
+            (SELECT COUNT(*) FROM matricula_asignaturas ma WHERE ma.matricula_id=m.id AND ma.activo=1) asignaturas"
+            .$from.$condition.' ORDER BY m.id DESC LIMIT '.$perPage.' OFFSET '.$offset;
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return ['rows'=>$stmt->fetchAll(), 'total'=>$total, 'page'=>$page, 'pages'=>$pages];
+    }
+
+    public function enrollmentHistoryFilters(): array
+    {
+        return [
+            'estados'=>$this->db->query('SELECT codigo,nombre FROM estados_matricula ORDER BY nombre')->fetchAll(),
+            'periodos'=>$this->db->query('SELECT id,nombre FROM periodos_academicos ORDER BY fecha_inicio DESC,id DESC LIMIT 150')->fetchAll(),
+            'carreras'=>$this->db->query('SELECT id,nombre FROM carreras ORDER BY nombre')->fetchAll(),
+        ];
+    }
+
     public function pendingAcademicConfirmations(): array
     {
         $s = $this->db->query("SELECT m.id,m.numero_matricula,em.codigo estado_codigo,em.nombre estado,p.nombre periodo,CONCAT_WS(' ',pe.primer_nombre,pe.segundo_nombre,pe.primer_apellido,pe.segundo_apellido) estudiante,e.codigo_estudiante,c.nombre carrera,(SELECT COUNT(*) FROM matricula_asignaturas ma WHERE ma.matricula_id=m.id AND ma.activo=1) asignaturas FROM matriculas m JOIN estados_matricula em ON em.id=m.estado_matricula_id JOIN periodos_academicos p ON p.id=m.periodo_academico_id JOIN estudiante_carreras ec ON ec.id=m.estudiante_carrera_id JOIN estudiantes e ON e.id=ec.estudiante_id JOIN personas pe ON pe.id=e.persona_id JOIN carreras c ON c.id=ec.carrera_id WHERE m.activo=1 AND em.codigo IN('BORRADOR','PENDIENTE_VALIDACION','PENDIENTE_FINANCIERO') ORDER BY p.fecha_inicio DESC,m.id DESC LIMIT 200");
