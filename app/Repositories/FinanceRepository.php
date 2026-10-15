@@ -74,7 +74,39 @@ final class FinanceRepository{
     $this->syncEnablement((int)$o['estudiante_carrera_id'],(int)$o['periodo_academico_id'],$first['id'],$payment,$code,'Primera cuota acumulada: '.number_format($pct,2).'%',$actor);
    }
    $this->db->commit();
+   // La revisión financiera ya fue confirmada. La transición académica se ejecuta
+   // después del commit para no anidar transacciones PDO independientes.
+   // Si falla, el pago sigue aprobado y puede recuperarse con el conciliador CLI.
+   if ($first && $firstApplied && in_array($code ?? '', ['HABILITADA', 'HABILITADA_ABONO_80'], true)) {
+    try {
+     $this->confirmEnabledEnrollments((int)$o['estudiante_carrera_id'], (int)$o['periodo_academico_id'], $actor);
+    } catch (Throwable $syncError) {
+     error_log('[Orion] Confirmación automática pendiente para trayectoria '.(int)$o['estudiante_carrera_id'].': '.$syncError->getMessage());
+    }
+   }
   }catch(Throwable $e){if($this->db->inTransaction())$this->db->rollBack();throw $e;}
+ }
+ /** Confirma solamente matrículas pendientes con habilitación financiera vigente. */
+ public function confirmEnabledEnrollments(int $trajectory, int $period, int $actor): int {
+  $q=$this->db->prepare("SELECT h.id FROM habilitaciones_financieras h JOIN estados_habilitacion_financiera e ON e.id=h.estado_habilitacion_financiera_id WHERE h.estudiante_carrera_id=:t AND h.periodo_academico_id=:p AND e.habilita_matricula=1 AND (h.fecha_hasta IS NULL OR h.fecha_hasta>=NOW()) LIMIT 1");
+  $q->execute(['t'=>$trajectory,'p'=>$period]);
+  if(!$q->fetchColumn())return 0;
+  // La confirmación individual abre su propia transacción y valida de nuevo el estado.
+  $q=$this->db->prepare("SELECT m.id FROM matriculas m JOIN estados_matricula e ON e.id=m.estado_matricula_id WHERE m.estudiante_carrera_id=:t AND m.periodo_academico_id=:p AND m.activo=1 AND e.codigo='PENDIENTE_FINANCIERO' ORDER BY m.id");
+  $q->execute(['t'=>$trajectory,'p'=>$period]);
+  $ids=$q->fetchAll(PDO::FETCH_COLUMN);
+  $academic=new AcademicEnrollmentRepository($this->db);
+  $confirmed=0;
+  foreach($ids as $id){
+   try{if($academic->academicConfirm((int)$id,$actor)==='CONFIRMADA')$confirmed++;}
+   catch(RuntimeException $e){
+    // Si otra operación ya confirmó esta matrícula, el reintento es inocuo.
+    $state=$this->db->prepare("SELECT e.codigo FROM matriculas m JOIN estados_matricula e ON e.id=m.estado_matricula_id WHERE m.id=:id");
+    $state->execute(['id'=>$id]);
+    if($state->fetchColumn()!=='CONFIRMADA')throw $e;
+   }
+  }
+  return $confirmed;
  }
  public function annulOrder(int $orderId,string $reason,int $actor):void{if(trim($reason)==='')throw new RuntimeException('Debes indicar el motivo de anulación.');$this->db->beginTransaction();try{$q=$this->db->prepare("SELECT o.id,eo.codigo estado_codigo,(SELECT COUNT(*) FROM pagos p WHERE p.orden_pago_id=o.id) pagos FROM ordenes_pago o JOIN estados_orden_pago eo ON eo.id=o.estado_orden_pago_id WHERE o.id=:id FOR UPDATE");$q->execute(['id'=>$orderId]);$o=$q->fetch();if(!$o)throw new RuntimeException('Orden no encontrada.');if($o['estado_codigo']==='ANULADA'){ $this->db->commit(); return; }if((int)$o['pagos']>0)throw new RuntimeException('No se puede anular una orden que ya tiene pagos registrados.');$an=$this->id('estados_orden_pago','ANULADA');$u=$this->db->prepare("UPDATE ordenes_pago SET estado_orden_pago_id=:e,anulada_at=NOW(),anulada_por_usuario_id=:u,motivo_anulacion=:m,observacion=CONCAT(COALESCE(observacion,''),'\nANULADA: ',:m2) WHERE id=:id");$u->execute(['e'=>$an,'u'=>$actor?:null,'m'=>trim($reason),'m2'=>trim($reason),'id'=>$orderId]);$ca=$this->id('estados_cuota','ANULADA');$c=$this->db->prepare("UPDATE cuotas_pago SET estado_cuota_id=:e WHERE orden_pago_id=:o");$c->execute(['e'=>$ca,'o'=>$orderId]);$this->db->commit();}catch(Throwable$e){if($this->db->inTransaction())$this->db->rollBack();throw$e;}}
  private function syncEnablement(int$ec,int$period,?int$cuota,?int$pago,string$finCode,string$reason,int$actor):void{$fin=$this->id('estados_habilitacion_financiera',$finCode);$s=$this->db->prepare("INSERT INTO habilitaciones_financieras(estudiante_carrera_id,periodo_academico_id,estado_habilitacion_financiera_id,cuota_referencia_id,pago_referencia_id,fecha_desde,motivo,actualizado_por_usuario_id) VALUES(:e,:p,:s,:c,:pg,NOW(),:m,:u) ON DUPLICATE KEY UPDATE estado_habilitacion_financiera_id=VALUES(estado_habilitacion_financiera_id),cuota_referencia_id=VALUES(cuota_referencia_id),pago_referencia_id=VALUES(pago_referencia_id),fecha_desde=NOW(),fecha_hasta=NULL,motivo=VALUES(motivo),actualizado_por_usuario_id=VALUES(actualizado_por_usuario_id)");$s->execute(['e'=>$ec,'p'=>$period,'s'=>$fin,'c'=>$cuota,'pg'=>$pago,'m'=>$reason,'u'=>$actor]);$enabled=in_array($finCode,['HABILITADA','HABILITADA_ABONO_80'],true);$acad=$this->id('estados_habilitacion_matricula',$enabled?'HABILITADA':'BLOQUEADA_FINANCIERO');$h=$this->db->prepare("INSERT INTO habilitaciones_matricula(estudiante_carrera_id,periodo_academico_id,estado_habilitacion_id,origen,referencia_id,fecha_habilitacion,fecha_deshabilitacion,observacion) VALUES(:e,:p,:s,'FINANCIERO',:r,:fh,:fd,:o) ON DUPLICATE KEY UPDATE estado_habilitacion_id=VALUES(estado_habilitacion_id),origen='FINANCIERO',referencia_id=VALUES(referencia_id),fecha_habilitacion=VALUES(fecha_habilitacion),fecha_deshabilitacion=VALUES(fecha_deshabilitacion),observacion=VALUES(observacion)");$h->execute(['e'=>$ec,'p'=>$period,'s'=>$acad,'r'=>$pago,'fh'=>$enabled?date('Y-m-d H:i:s'):null,'fd'=>$enabled?null:date('Y-m-d H:i:s'),'o'=>$reason]);}
