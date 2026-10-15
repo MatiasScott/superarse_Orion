@@ -186,3 +186,6 @@ $router->get('/admin/financiero/pagos/comprobante', [\App\Controllers\Admin\Fina
 $router->get('/estudiante/financiero', [\App\Controllers\Student\StudentFinanceController::class, 'index']);
 $router->post('/estudiante/financiero/comprobante', [\App\Controllers\Student\StudentFinanceController::class, 'register']);
 $router->get('/estudiante/financiero/comprobante', [\App\Controllers\Student\StudentFinanceController::class, 'proof']);
+
+// v0.11.0 - Diagnóstico Moodle (solo lectura, protegido por TIC)
+$router->get('/admin/tic/moodle', [\App\Controllers\Admin\MoodleIntegrationController::class, 'index']);
