@@ -32,9 +32,9 @@ $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QU
 <p><strong>Estado de conciliación:</strong> <?= $e(str_replace('_', ' ', $row['course_status'])) ?> · <strong>Categoría de nivel:</strong> <?= $row['category_id'] === null ? 'Pendiente' : '#'.(int)$row['category_id'] ?></p>
 <?php if ($row['saved_mapping']): ?><p><strong>Vinculado en Orion:</strong> curso Moodle #<?= (int)$row['saved_mapping']['moodle_course_id'] ?> · <?= $e($row['saved_mapping']['fullname_moodle']) ?></p><?php endif; ?>
 <p><strong>Curso con clave exacta:</strong> <?= $row['course_id'] !== null ? '#'.(int)$row['course_id'] : 'No identificado' ?></p>
-<?php if ($row['suggestions']): ?><details><summary>Posibles cursos existentes por nombre o código (<?= (int)$row['suggestion_total'] ?>) — requieren revisión manual</summary><ul><?php foreach ($row['suggestions'] as $s): ?><li>#<?= (int)$s['id'] ?> · <?= $e($s['name']) ?> · categoría #<?= (int)$s['category'] ?> · <?= $s['same_category'] ? 'MISMO NIVEL' : 'OTRA CATEGORÍA' ?> · <?= $s['name_match'] ? 'nombre coincide' : 'nombre distinto' ?><?= $s['code_match'] ? ' · código coincide' : '' ?>
+<?php if ($row['suggestions'] && !$row['saved_mapping']): ?><details><summary>Posibles cursos existentes por nombre o código (<?= (int)$row['suggestion_total'] ?>) — requieren revisión manual</summary><ul><?php foreach ($row['suggestions'] as $s): ?><li>#<?= (int)$s['id'] ?> · <?= $e($s['name']) ?> · categoría #<?= (int)$s['category'] ?> · <?= $s['same_category'] ? 'MISMO NIVEL' : 'OTRA CATEGORÍA' ?> · <?= $s['name_match'] ? 'nombre coincide' : 'nombre distinto' ?><?= $s['code_match'] ? ' · código coincide' : '' ?>
 <?php if (!$row['saved_mapping'] && !$row['blocked'] && $s['same_category'] && $s['name_match']): ?>
-<form method="post" action="<?= $e($u) ?>/admin/tic/moodle/vincular" style="display:inline-block;margin-left:1rem" onsubmit="return confirm('¿Confirmar vinculación con el curso Moodle #<?= (int)$s['id'] ?>? No modificará Moodle.');">
+<form method="post" action="<?= $e($u) ?>/admin/tic/moodle/vincular" style="display:inline-block;margin-left:1rem" data-moodle-link-form="1" data-moodle-course-id="<?= (int)$s['id'] ?>">
 <input type="hidden" name="_csrf" value="<?= $e(\App\Core\Csrf::token()) ?>">
 <input type="hidden" name="periodo" value="<?= (int)$preview['period']['id'] ?>">
 <input type="hidden" name="oferta_id" value="<?= (int)$row['subject']['oferta_id'] ?>">
@@ -46,3 +46,66 @@ $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QU
 <?php endforeach; ?>
 <p><strong>Modo seguro:</strong> <?= $e($preview['notice']) ?></p>
 <?php endif; ?></div>
+
+<div class="orion-modal" id="moodleLinkModal" aria-hidden="true">
+  <div class="orion-modal-backdrop" data-moodle-close></div>
+  <div class="orion-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="moodleLinkTitle">
+    <button type="button" class="orion-modal-x" data-moodle-close aria-label="Cerrar">×</button>
+    <span class="eyebrow">TIC · MOODLE</span>
+    <h2 id="moodleLinkTitle">Confirmar vinculación</h2>
+    <p>¿Deseas vincular la asignatura con el curso Moodle <strong id="moodleLinkCourse"></strong>?</p>
+    <p class="muted">Solo se guardará la vinculación en Orion. No se modificará Moodle.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" data-moodle-close>Cancelar</button>
+      <button type="button" class="btn" id="moodleLinkAccept">Sí, confirmar vínculo</button>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  'use strict';
+  const modal = document.getElementById('moodleLinkModal');
+  const accept = document.getElementById('moodleLinkAccept');
+  const label = document.getElementById('moodleLinkCourse');
+  if (!modal || !accept || !label) return;
+  let formToSubmit = null, opener = null;
+  function close() {
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+    formToSubmit = null;
+    if (opener && opener.isConnected) opener.focus();
+  }
+  document.querySelectorAll('[data-moodle-link-form]').forEach(form => {
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      formToSubmit = form;
+      opener = event.submitter || form.querySelector('button');
+      label.textContent = '#' + form.dataset.moodleCourseId;
+      modal.classList.add('is-open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('modal-open');
+      accept.focus();
+    });
+  });
+  modal.querySelectorAll('[data-moodle-close]').forEach(x => x.addEventListener('click', close));
+  document.addEventListener('keydown', event => {
+    if (!modal.classList.contains('is-open')) return;
+    if (event.key === 'Escape') { event.preventDefault(); close(); }
+    if (event.key === 'Tab') {
+      const controls = [...modal.querySelectorAll('button:not([disabled])')];
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+  });
+  accept.addEventListener('click', () => {
+    if (!formToSubmit) return;
+    const form = formToSubmit;
+    formToSubmit = null;
+    accept.disabled = true;
+    accept.textContent = 'Guardando…';
+    form.submit();
+  });
+})();
+</script>

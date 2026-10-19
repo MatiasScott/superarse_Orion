@@ -81,11 +81,12 @@ final class MoodleIntegrationController
                 $error = $e->getMessage();
             }
         }
+        $linkNotice = Session::get('moodle_link_notice');
         Session::set('moodle_link_notice', null);
         View::render('admin/tic/moodle', [
             'title' => 'TIC · Integración Moodle', 'enabled' => $enabled,
             'site' => $site, 'error' => $error, 'periods' => $periods, 'preview' => $preview,
-            'linkNotice' => Session::get('moodle_link_notice'),
+            'linkNotice' => $linkNotice,
         ]);
     }
 }
