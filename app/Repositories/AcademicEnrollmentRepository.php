@@ -279,7 +279,7 @@ final class AcademicEnrollmentRepository
         $s = $this->db->prepare(
             "SELECT ma.id malla_asignatura_id,ma.asignatura_id,a.codigo,a.nombre,n.nombre nivel,n.orden_nivel,ma.orden_en_nivel,ma.creditos,
             x.id seccion_id,x.codigo seccion_codigo,x.nombre seccion,pa.nombre paralelo,x.cupo_maximo,
-            (SELECT COUNT(*) FROM matricula_asignaturas mx JOIN estados_matricula_asignatura ex ON ex.id=mx.estado_matricula_asignatura_id WHERE mx.seccion_id=x.id AND mx.activo=1 AND ex.codigo<>'ANULADA') ocupados 
+            (SELECT COUNT(DISTINCT mx.matricula_id) FROM matricula_asignaturas mx JOIN estados_matricula_asignatura ex ON ex.id=mx.estado_matricula_asignatura_id JOIN matriculas mm ON mm.id=mx.matricula_id JOIN estados_matricula emm ON emm.id=mm.estado_matricula_id WHERE mx.seccion_id=x.id AND mx.activo=1 AND mm.activo=1 AND ex.codigo<>'ANULADA' AND emm.codigo<>'ANULADA') ocupados 
             FROM malla_asignaturas ma 
             JOIN asignaturas a ON a.id=ma.asignatura_id 
             JOIN niveles_academicos n ON n.id=ma.nivel_academico_id 
@@ -319,7 +319,7 @@ final class AcademicEnrollmentRepository
                 $subjects[$id] = ['malla_asignatura_id' => $id, 'codigo' => $r['codigo'], 'nombre' => $r['nombre'], 'nivel' => $r['nivel'], 'orden_nivel' => $r['orden_nivel'], 'creditos' => $r['creditos'], 'approved' => $approved, 'attempt' => $attempt, 'prerequisites' => $pre, 'eligible' => !$blocked, 'reason' => $reason, 'pending' => $attempt['max'] > 0 && !$approved, 'sections' => []];
             }
             if ($r['seccion_id']) {
-                $available = $r['cupo_maximo'] === null || (int)$r['ocupados'] < (int)$r['cupo_maximo'];
+                $available = $r['cupo_maximo'] !== null && (int)$r['cupo_maximo'] > 0 && (int)$r['ocupados'] < (int)$r['cupo_maximo'];
                 $subjects[$id]['sections'][] = ['id' => (int)$r['seccion_id'], 'codigo' => $r['seccion_codigo'], 'nombre' => $r['seccion'], 'paralelo' => $r['paralelo'], 'cupo_maximo' => $r['cupo_maximo'], 'ocupados' => (int)$r['ocupados'], 'available' => $available];
             }
         }
@@ -374,11 +374,19 @@ final class AcademicEnrollmentRepository
         if (!$selected) throw new RuntimeException('Selecciona al menos una asignatura elegible.');
         $this->db->beginTransaction();
         try {
+            // Serializar las solicitudes de una misma trayectoria incluso cuando
+            // todavía no existe una matrícula para ese período.
+            $trajectoryLock = $this->db->prepare('SELECT id FROM estudiante_carreras WHERE id = ? FOR UPDATE');
+            $trajectoryLock->execute([$trajectory]);
+            if (!$trajectoryLock->fetchColumn()) {
+                throw new RuntimeException('La trayectoria académica ya no existe.');
+            }
             // Bloquear las secciones elegidas evita sobreasignar cupos entre dos matrículas concurrentes.
             $sectionIds = array_values(array_unique(array_filter(array_map('intval', array_values($selected)))));
+            sort($sectionIds, SORT_NUMERIC); // Orden determinista de bloqueos para reducir interbloqueos.
             if ($sectionIds) {
                 $marks = implode(',', array_fill(0, count($sectionIds), '?'));
-                $lock = $this->db->prepare("SELECT id FROM secciones WHERE id IN ($marks) FOR UPDATE");
+                $lock = $this->db->prepare("SELECT id FROM secciones WHERE id IN ($marks) ORDER BY id FOR UPDATE");
                 $lock->execute($sectionIds);
                 if (count($lock->fetchAll()) !== count($sectionIds)) throw new RuntimeException('Una de las secciones seleccionadas ya no existe.');
             }
@@ -440,7 +448,11 @@ final class AcademicEnrollmentRepository
             foreach ($selected as $ma => $section) {
                 $ma = (int)$ma;
                 $section = (int)$section;
-                if (!$ma || !$section || !isset($eligible[$ma])) continue;
+                // Una selección enviada por el cliente nunca debe omitirse
+                // silenciosamente: invalidaría el borrador solicitado.
+                if (!$ma || !$section || !isset($eligible[$ma])) {
+                    throw new RuntimeException('La selección contiene una asignatura no elegible o una sección inválida. Actualiza la propuesta.');
+                }
                 $subject = $eligible[$ma];
                 $valid = false;
                 foreach ($subject['sections'] as $sec) if ((int)$sec['id'] === $section && $sec['available']) {
@@ -450,9 +462,14 @@ final class AcademicEnrollmentRepository
                 if (!$valid) throw new RuntimeException('Una de las secciones seleccionadas ya no está disponible.');
                 // La sección ya está bloqueada FOR UPDATE en esta transacción.
                 // Verificación independiente del cálculo de la vista previa.
-                $cap = $this->db->prepare("SELECT s.cupo_maximo,(SELECT COUNT(*) FROM matricula_asignaturas ma JOIN estados_matricula_asignatura em ON em.id=ma.estado_matricula_asignatura_id WHERE ma.seccion_id=s.id AND ma.activo=1 AND em.codigo<>'ANULADA') ocupados FROM secciones s WHERE s.id=?");
+                $cap = $this->db->prepare("SELECT s.cupo_maximo,(SELECT COUNT(DISTINCT ma.matricula_id) FROM matricula_asignaturas ma JOIN estados_matricula_asignatura em ON em.id=ma.estado_matricula_asignatura_id JOIN matriculas mm ON mm.id=ma.matricula_id JOIN estados_matricula emm ON emm.id=mm.estado_matricula_id WHERE ma.seccion_id=s.id AND ma.activo=1 AND mm.activo=1 AND em.codigo<>'ANULADA' AND emm.codigo<>'ANULADA') ocupados FROM secciones s WHERE s.id=?");
                 $cap->execute([$section]);$capacity=$cap->fetch();
-                if(!$capacity || $capacity['cupo_maximo']===null || (int)$capacity['ocupados'] >= (int)$capacity['cupo_maximo']) throw new RuntimeException('Cupo máximo alcanzado. Solicita ampliación a Coordinación TICs.');
+                if (!$capacity || $capacity['cupo_maximo'] === null || (int)$capacity['cupo_maximo'] <= 0) {
+                    throw new RuntimeException('Esta asignatura no tiene un cupo autorizado válido. Contacta a Coordinación TICs.');
+                }
+                if ((int)$capacity['ocupados'] >= (int)$capacity['cupo_maximo']) {
+                    throw new RuntimeException('Cupo máximo alcanzado en la asignatura seleccionada. Solicita una ampliación a Coordinación TICs.');
+                }
 
                 $attempt = (int)$subject['attempt']['next'];
                 $ins = $this->db->prepare(
