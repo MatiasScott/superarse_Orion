@@ -77,6 +77,24 @@ final class MoodleAcademicPreview
           ORDER BY s.nombre,e.codigo,c.nombre,mo.nombre,na.orden_nivel,a.nombre LIMIT 1500");
         $stmt->execute([$periodId]);
         $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // Secciones activas del período: cada sección representa un posible grupo.
+        // No se consulta ni se modifica la base de datos de Moodle directamente.
+        $secStmt = $this->db->prepare("SELECT sec.id, sec.oferta_academica_id, ma.asignatura_id,
+                   sec.paralelo_id, sec.codigo AS seccion_codigo, sec.nombre AS seccion_nombre,
+                   p.codigo AS paralelo_codigo, p.nombre AS paralelo_nombre
+              FROM secciones sec
+              JOIN ofertas_academicas o ON o.id=sec.oferta_academica_id
+              JOIN malla_asignaturas ma ON ma.id=sec.malla_asignatura_id
+              LEFT JOIN paralelos p ON p.id=sec.paralelo_id
+              WHERE o.periodo_academico_id=? AND o.activo=1
+                AND sec.activo=1 AND sec.deleted_at IS NULL
+              ORDER BY sec.oferta_academica_id, ma.asignatura_id, sec.id");
+        $secStmt->execute([$periodId]);
+        $sectionsBySubject = [];
+        foreach ($secStmt->fetchAll(PDO::FETCH_ASSOC) as $section) {
+            $groupKey = (int)$section['oferta_academica_id'].':'.(int)$section['asignatura_id'];
+            $sectionsBySubject[$groupKey][] = $section;
+        }
         $categories = $this->moodle->categories();
         $courses = $this->moodle->courses();
         $byParent = [];
@@ -162,7 +180,30 @@ final class MoodleAcademicPreview
                 count($local) > 1 ? 'ambiguo_en_nivel' : (count($suggestions) ? 'coincidencia_fuera_de_nivel' : 'no_identificado')
             ));
             $saved = $this->savedMapping((int)$subject['oferta_id'], (int)$subject['asignatura_id']);
-            $rows[] = [
+            $subjectSections = $sectionsBySubject[(int)$subject['oferta_id'].':'.(int)$subject['asignatura_id']] ?? [];
+            $groupPlan = [];
+            $usedNames = [];
+            foreach ($subjectSections as $section) {
+                $groupName = trim((string)($section['paralelo_nombre'] ?? ''));
+                $groupName = $groupName !== '' ? $groupName : trim((string)$section['seccion_nombre']);
+                if ($groupName === '') $groupName = 'Sección #'.(int)$section['id'];
+                // Un curso puede tener varias secciones del mismo paralelo: se requiere
+                // una decisión explícita antes de asociarlas a un único grupo.
+                $nameKey = mb_strtolower($groupName, 'UTF-8');
+                $duplicate = isset($usedNames[$nameKey]);
+                $usedNames[$nameKey] = true;
+                $groupPlan[] = [
+                    'section_id'=>(int)$section['id'],
+                    'section_code'=>(string)$section['seccion_codigo'],
+                    'parallel_code'=>(string)($section['paralelo_codigo'] ?? ''),
+                    'group_name'=>$groupName,
+                    'needs_review'=>$duplicate || empty($section['paralelo_id']),
+                    'review_reason'=>$duplicate ? 'Nombre de grupo repetido en el curso' :
+                        (empty($section['paralelo_id']) ? 'Sección sin paralelo asignado' : ''),
+                ];
+            }
+            $rows[] = ['group_plan'=>$groupPlan,
+
                 'saved_mapping'=>$saved, 'subject'=>$subject, 'display_name'=>$displayName, 'segments'=>$segments,'key'=>$key,'blocked'=>$blocked,
                 'course_id'=>count($exact) === 1 ? (int)$exact[0]['id'] : null,
                 'suggestions'=>array_slice($suggestions,0,15), 'suggestion_total'=>count($suggestions),

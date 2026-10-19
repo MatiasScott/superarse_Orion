@@ -2,7 +2,7 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.5 · Creación controlada de cursos</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.6 · Vista previa de paralelos y grupos</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php if (!$enabled): ?><div class="alert">La integración Moodle está deshabilitada en .env.</div><?php endif; ?>
 <?php if (!empty($linkNotice)): ?><div class="alert"><?= $e($linkNotice) ?></div><?php endif; ?>
 <?php if ($error !== null): ?><div class="alert error">Error: <?= $e($error) ?></div><?php endif; ?>
@@ -78,6 +78,23 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 <input type="hidden" name="moodle_course_id" value="<?= (int)$s['id'] ?>">
 <button class="btn small secondary" type="submit">Confirmar vínculo</button></form>
 <?php endif; ?></li><?php endforeach; ?></ul></details><?php endif; ?>
+<div class="card" style="margin-top:1rem">
+<h5>Paralelos y grupos propuestos (solo lectura)</h5>
+<?php if (!$row['group_plan']): ?>
+<p class="muted">No se encontraron secciones activas para esta asignatura.</p>
+<?php else: ?>
+<p class="muted">Se muestran las secciones registradas en Orion. Aún no se consulta el inventario de grupos Moodle ni se crean grupos.</p>
+<table><thead><tr><th>Sección Orion</th><th>Paralelo</th><th>Nombre propuesto del grupo</th><th>Estado</th></tr></thead><tbody>
+<?php foreach ($row['group_plan'] as $group): ?>
+<tr><td>#<?= (int)$group['section_id'] ?> · <?= $e($group['section_code']) ?></td>
+<td><?= $e($group['parallel_code'] !== '' ? $group['parallel_code'] : 'Sin asignar') ?></td>
+<td><?= $e($group['group_name']) ?></td>
+<td><?= $group['needs_review'] ? 'Revisar: '.$e($group['review_reason']) : 'Listo para comparar' ?></td></tr>
+<?php endforeach; ?>
+</tbody></table>
+<?php endif; ?>
+<p><strong>Curso destino:</strong> <?= $row['saved_mapping'] ? '#'.(int)$row['saved_mapping']['moodle_course_id'].' (vinculado)' : 'Pendiente de vinculación o creación' ?>.</p>
+</div>
 </div>
 <?php endforeach; ?>
 <p><strong>Modo seguro:</strong> <?= $e($preview['notice']) ?></p>
