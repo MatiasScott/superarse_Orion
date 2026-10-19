@@ -204,5 +204,3 @@ $router->get('/admin/tic/cupos', [\App\Controllers\Admin\CapacityRequestControll
 $router->post('/admin/tic/cupos/resolver', [\App\Controllers\Admin\CapacityRequestController::class, 'resolve']);
 
 // Orion v0.11.12 — solicitudes por cohorte académica
-$router->post('/admin/academico/cupos/solicitar-cohorte', [\App\Controllers\Admin\CapacityRequestController::class, 'requestCohort']);
-$router->post('/admin/tic/cupos/resolver-cohorte', [\App\Controllers\Admin\CapacityRequestController::class, 'resolveCohort']);
