@@ -34,6 +34,17 @@ final class AcademicOfferingRepository{
  public function parallels():array{return $this->db->query("SELECT id,codigo,nombre FROM paralelos WHERE activo=1 ORDER BY id")->fetchAll();}
  public function saveSection(array $d):int{
   $q=$this->db->prepare("SELECT COUNT(*) FROM ofertas_academicas o JOIN malla_asignaturas ma ON ma.malla_id=o.malla_id WHERE o.id=:o AND ma.id=:ma AND ma.activa=1");$q->execute(['o'=>$d['offer'],'ma'=>$d['subject']]);if(!(int)$q->fetchColumn())throw new RuntimeException('La asignatura no pertenece a la malla de esta oferta.');
+  // Política institucional: un único paralelo A y cupos calculados en backend.
+  $rule=$this->db->prepare("SELECT c.nombre carrera,n.orden_nivel nivel FROM ofertas_academicas o JOIN carreras c ON c.id=o.carrera_id JOIN malla_asignaturas ma ON ma.id=:ma AND ma.malla_id=o.malla_id JOIN niveles_academicos n ON n.id=ma.nivel_academico_id WHERE o.id=:o");
+  $rule->execute(['ma'=>$d['subject'],'o'=>$d['offer']]);
+  $context=$rule->fetch(PDO::FETCH_ASSOC);
+  if (!$context) throw new RuntimeException('No se pudo determinar carrera y nivel de la sección.');
+  $parallel=$this->db->query("SELECT id FROM paralelos WHERE UPPER(TRIM(codigo))='A' AND activo=1 ORDER BY id LIMIT 1")->fetchColumn();
+  if (!$parallel) throw new RuntimeException('No está configurado el paralelo A en Orion.');
+  $d['parallel']=(int)$parallel;
+  $career=strtolower(trim((string)$context['carrera']));
+  $career=preg_replace('/[áàäâ]/u','a',$career);
+  $d['capacity']=(str_contains($career,'topografia') && (int)$context['nivel']===1)?25:50;
   $s=$this->db->prepare("INSERT INTO secciones(oferta_academica_id,malla_asignatura_id,paralelo_id,estado_seccion_id,codigo,nombre,cupo_maximo,permite_matricula,fecha_apertura,fecha_cierre,activo) VALUES(:o,:ma,:p,:e,:c,:n,:cu,:pm,:fa,:fc,1)");$s->execute(['o'=>$d['offer'],'ma'=>$d['subject'],'p'=>$d['parallel']?:null,'e'=>$d['state'],'c'=>$d['code'],'n'=>$d['name'],'cu'=>$d['capacity']?:null,'pm'=>$d['allow'],'fa'=>$d['open']?:null,'fc'=>$d['close']?:null]);return(int)$this->db->lastInsertId();
  }
 }
