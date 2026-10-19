@@ -2,7 +2,7 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.3 · Vinculación confirmada de cursos (sin escrituras en Moodle)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.4 · Vinculación y sincronización controlada de categorías</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php if (!$enabled): ?><div class="alert">La integración Moodle está deshabilitada en .env.</div><?php endif; ?>
 <?php if (!empty($linkNotice)): ?><div class="alert"><?= $e($linkNotice) ?></div><?php endif; ?>
 <?php if ($error !== null): ?><div class="alert error">Error: <?= $e($error) ?></div><?php endif; ?>
@@ -13,7 +13,7 @@ $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QU
 <tr><th>Usuario técnico (ID)</th><td><?= $e($site['userid'] ?? '-') ?></td></tr>
 <tr><th>Versión Moodle</th><td><?= $e($site['release'] ?? '-') ?></td></tr>
 </tbody></table><?php endif; ?>
-<p>No se muestran credenciales ni se crean categorías, cursos o matrículas.</p></div>
+<p>No se muestran credenciales. La creación de categorías requiere confirmación; no se crean cursos ni matrículas.</p></div>
 <div class="card"><h2>Superarse → Período → Campus → Escuela → Carrera → [Modalidad] → Nivel → Cursos</h2>
 <form method="get" action="<?= $e($u) ?>/admin/tic/moodle"><label for="periodo">Período académico</label><select id="periodo" name="periodo" required><option value="">Seleccione...</option>
 <?php foreach ($periods as $p): ?><option value="<?= (int)$p['id'] ?>" <?= isset($preview['period']['id']) && (int)$preview['period']['id'] === (int)$p['id'] ? 'selected' : '' ?>><?= $e($p['nombre']) ?> (<?= $e($p['codigo']) ?>) · <?= (int)$p['ofertas'] ?> ofertas</option><?php endforeach; ?></select><button class="btn" type="submit">Ver vista previa</button></form>
@@ -22,6 +22,29 @@ $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QU
 <p><strong>Inventario Moodle:</strong> <?= (int)$preview['category_count'] ?> categorías · <?= (int)$preview['course_count'] ?> cursos. <strong>Raíz Superarse:</strong> <?= $preview['root_id'] === null ? 'No identificada' : '#'.(int)$preview['root_id'] ?>.</p>
 <?php foreach ($preview['warnings'] as $w): ?><div class="alert error"><?= $e($w) ?></div><?php endforeach; ?>
 <?php if (!$preview['rows']): ?><p>El período no tiene asignaturas con secciones activas.</p><?php endif; ?>
+<?php
+$syncPlan = [];
+try { $syncPlan = (new \App\Integrations\Moodle\MoodleCategorySync(
+    (new \App\Core\Database(new \App\Core\Config($_ENV)))->connection(),
+    new \App\Integrations\Moodle\MoodleRestClient($_ENV)
+))->plan($preview); } catch (\Throwable $ignored) {}
+$missingCategories = array_values(array_filter($syncPlan, static fn($item) => $item['existing_id'] === null));
+?>
+<div class="card" style="margin:1rem 0">
+  <h3>Plan de categorías para este período</h3>
+  <p><?= count($syncPlan) ?> categorías en la ruta académica · <strong><?= count($missingCategories) ?> pendientes de creación</strong>. Las existentes se reutilizan.</p>
+  <?php if ($missingCategories): ?><details><summary>Ver categorías pendientes</summary><ul>
+  <?php foreach ($missingCategories as $item): ?><li><?= $e($item['label']) ?>: <?= $e($item['name']) ?></li><?php endforeach; ?>
+  </ul></details><?php endif; ?>
+  <?php if ($syncEnabled && $syncPlan && !$preview['warnings']): ?>
+  <form method="post" action="<?= $e($u) ?>/admin/tic/moodle/sincronizar-categorias" id="moodleCategorySyncForm">
+    <input type="hidden" name="_csrf" value="<?= $e(\App\Core\Csrf::token()) ?>">
+    <input type="hidden" name="periodo" value="<?= (int)$preview['period']['id'] ?>">
+    <input type="hidden" name="confirmacion" value="SINCRONIZAR">
+    <button type="submit" class="btn" <?= !$missingCategories ? 'disabled' : '' ?>>Sincronizar categorías pendientes</button>
+  </form>
+  <?php elseif (!$syncEnabled): ?><p class="muted">Sincronización desactivada. Configure <code>MOODLE_SYNC_ENABLED=true</code> en .env solo cuando esté listo para autorizar escrituras.</p><?php endif; ?>
+</div>
 <?php foreach ($preview['rows'] as $row): ?>
 <div class="card" style="margin-top:1rem"><h4><?= $e($row['display_name'] ?? $row['subject']['asignatura']) ?> <small>(<?= $e($row['subject']['asignatura_codigo']) ?>)</small></h4>
 <p><strong>Oferta #<?= (int)$row['subject']['oferta_id'] ?></strong> · Clave propuesta: <code><?= $e($row['key']) ?></code></p>
@@ -107,5 +130,31 @@ $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QU
     accept.textContent = 'Guardando…';
     form.submit();
   });
+})();
+</script>
+
+<div class="orion-modal" id="moodleCategoryModal" aria-hidden="true">
+  <div class="orion-modal-backdrop" data-category-close></div>
+  <div class="orion-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="moodleCategoryTitle">
+    <button type="button" class="orion-modal-x" data-category-close aria-label="Cerrar">×</button>
+    <span class="eyebrow">TIC · MOODLE</span>
+    <h2 id="moodleCategoryTitle">Sincronizar categorías</h2>
+    <p>Orion volverá a consultar Moodle y creará únicamente las categorías que falten en la jerarquía académica. No moverá categorías ni modificará cursos.</p>
+    <p class="muted">La operación puede ser parcial si Moodle interrumpe la conexión. Los reintentos verifican los IDs existentes.</p>
+    <div class="modal-actions"><button type="button" class="btn secondary" data-category-close>Cancelar</button>
+      <button type="button" class="btn" id="moodleCategoryAccept">Sí, sincronizar categorías</button></div>
+  </div>
+</div>
+<script>
+(() => {
+  const form = document.getElementById('moodleCategorySyncForm');
+  const modal = document.getElementById('moodleCategoryModal');
+  const accept = document.getElementById('moodleCategoryAccept');
+  if (!form || !modal || !accept) return;
+  const close = () => { modal.classList.remove('is-open'); modal.setAttribute('aria-hidden','true'); document.body.classList.remove('modal-open'); form.querySelector('button[type="submit"]').focus(); };
+  form.addEventListener('submit', e => { e.preventDefault(); modal.classList.add('is-open'); modal.setAttribute('aria-hidden','false'); document.body.classList.add('modal-open'); accept.focus(); });
+  modal.querySelectorAll('[data-category-close]').forEach(b => b.addEventListener('click', close));
+  document.addEventListener('keydown', e => { if (modal.classList.contains('is-open') && e.key === 'Escape') close(); });
+  accept.addEventListener('click', () => { accept.disabled = true; accept.textContent = 'Sincronizando…'; form.submit(); });
 })();
 </script>

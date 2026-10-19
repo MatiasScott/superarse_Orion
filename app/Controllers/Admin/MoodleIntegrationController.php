@@ -11,6 +11,7 @@ use App\Core\Config;
 use App\Core\Database;
 use App\Integrations\Moodle\MoodleRestClient;
 use App\Integrations\Moodle\MoodleAcademicPreview;
+use App\Integrations\Moodle\MoodleCategorySync;
 use App\Services\AccessService;
 use Throwable;
 
@@ -61,6 +62,33 @@ final class MoodleIntegrationController
         Response::redirect('/admin/tic/moodle?periodo='.$periodId);
     }
 
+    public function syncCategories(Request $request): never
+    {
+        AccessService::require('tic.cuentas.aprobar');
+        if (!Csrf::validate((string)$request->input('_csrf'))) Response::abort(419, 'CSRF inválido.');
+        if (!filter_var($_ENV['MOODLE_SYNC_ENABLED'] ?? false, FILTER_VALIDATE_BOOL)) {
+            Response::abort(403, 'Habilite MOODLE_SYNC_ENABLED=true para sincronizar categorías.');
+        }
+        $periodId = (int)$request->input('periodo');
+        if ($periodId < 1 || (string)$request->input('confirmacion') !== 'SINCRONIZAR') {
+            Response::abort(422, 'Confirmación de sincronización inválida.');
+        }
+        try {
+            $db = (new Database(new Config($_ENV)))->connection();
+            $client = new MoodleRestClient($_ENV);
+            $academic = new MoodleAcademicPreview($db, $client);
+            $preview = $academic->preview($periodId);
+            $sync = new MoodleCategorySync($db, $client);
+            $user = (array)Session::get('auth_user', []);
+            $result = $sync->execute($preview, $periodId, isset($user['id']) ? (int)$user['id'] : null);
+            Session::set('moodle_link_notice', 'Categorías: '.$result['created'].' creadas y '.$result['reused'].' reutilizadas. No se modificaron cursos.');
+        } catch (Throwable $e) {
+            // Puede existir una sincronización parcial; cada reintento vuelve a consultar Moodle.
+            Session::set('moodle_link_notice', 'Sincronización interrumpida: '.$e->getMessage().' Revise Moodle antes de reintentar.');
+        }
+        Response::redirect('/admin/tic/moodle?periodo='.$periodId);
+    }
+
     public function index(Request $request): void
     {
         AccessService::require('tic.cuentas.ver');
@@ -86,7 +114,7 @@ final class MoodleIntegrationController
         View::render('admin/tic/moodle', [
             'title' => 'TIC · Integración Moodle', 'enabled' => $enabled,
             'site' => $site, 'error' => $error, 'periods' => $periods, 'preview' => $preview,
-            'linkNotice' => $linkNotice,
+            'linkNotice' => $linkNotice, 'syncEnabled' => filter_var($_ENV['MOODLE_SYNC_ENABLED'] ?? false, FILTER_VALIDATE_BOOL) && AccessService::can('tic.cuentas.aprobar'),
         ]);
     }
 }

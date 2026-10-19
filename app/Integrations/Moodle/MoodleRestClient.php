@@ -45,7 +45,32 @@ final class MoodleRestClient
         return $this->read('core_course_get_courses');
     }
 
+    /** Escritura explícita: la sincronización debe estar habilitada por configuración. */
+    public function createCategory(string $name, int $parentId, string $idnumber): array
+    {
+        if (!filter_var($_ENV['MOODLE_SYNC_ENABLED'] ?? false, FILTER_VALIDATE_BOOL)) {
+            throw new RuntimeException('Sincronización Moodle deshabilitada en .env.');
+        }
+        if ($parentId < 1 || trim($name) === '') {
+            throw new RuntimeException('Nombre o categoría padre inválidos.');
+        }
+        $result = $this->call('core_course_create_categories', [
+            'categories' => [[
+                'name' => $name, 'parent' => $parentId, 'idnumber' => $idnumber,
+            ]],
+        ]);
+        if (!isset($result[0]['id']) || (int)$result[0]['id'] < 1) {
+            throw new RuntimeException('Moodle no confirmó el ID de la categoría creada.');
+        }
+        return $result[0];
+    }
+
     private function read(string $function): array
+    {
+        return $this->call($function, []);
+    }
+
+    private function call(string $function, array $params): array
     {
         if (!function_exists('curl_init')) {
             throw new RuntimeException('La extensión PHP cURL no está habilitada.');
@@ -57,11 +82,11 @@ final class MoodleRestClient
         try {
             curl_setopt_array($ch, [
                 CURLOPT_POST => true,
-                CURLOPT_POSTFIELDS => http_build_query([
+                CURLOPT_POSTFIELDS => http_build_query(array_merge([
                     'wstoken' => $this->token,
                     'wsfunction' => $function,
                     'moodlewsrestformat' => 'json',
-                ]),
+                ], $params)),
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_CONNECTTIMEOUT => min(10, $this->timeout),
                 CURLOPT_TIMEOUT => $this->timeout,

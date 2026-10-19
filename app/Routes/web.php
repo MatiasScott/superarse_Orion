@@ -192,3 +192,4 @@ $router->get('/admin/tic/moodle', [\App\Controllers\Admin\MoodleIntegrationContr
 
 // v0.11.3 - Vinculación confirmada por TIC; no escribe en Moodle.
 $router->post('/admin/tic/moodle/vincular', [\App\Controllers\Admin\MoodleIntegrationController::class, 'link']);
+$router->post('/admin/tic/moodle/sincronizar-categorias', [\App\Controllers\Admin\MoodleIntegrationController::class, 'syncCategories']);
