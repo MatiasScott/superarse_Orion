@@ -3,13 +3,15 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 use App\Core\{Container,Csrf,Database,Request,Response,Session,View};
 use App\Repositories\CapacityRequestRepository;
+use App\Repositories\CohortCapacityRepository;
 use App\Services\AccessService;
 use Throwable;
 final class CapacityRequestController {
  private function repo():CapacityRequestRepository{return new CapacityRequestRepository(Container::get(Database::class)->connection());}
+ private function cohortRepo():CohortCapacityRepository{return new CohortCapacityRepository(Container::get(Database::class)->connection());}
  private function actor():int{return (int)(Session::get('auth_user')['id']??0);}
  private function csrf(Request $r):void{if(!Csrf::validate((string)$r->input('_csrf')))Response::abort(419,'CSRF inválido.');}
- public function index(Request $r):void{AccessService::require('tic.cuentas.aprobar');View::render('admin/tic/cupos',['title'=>'Solicitudes de ampliación de cupos','requests'=>$this->repo()->all(),'flash'=>Session::get('capacity_flash')]);Session::set('capacity_flash',null);}
+ public function index(Request $r):void{AccessService::require('tic.cuentas.aprobar');View::render('admin/tic/cupos',['title'=>'Solicitudes de ampliación de cupos','requests'=>$this->repo()->all(),'cohortRequests'=>$this->cohortRepo()->all(),'flash'=>Session::get('capacity_flash')]);Session::set('capacity_flash',null);}
  public function academicIndex(Request $r):void{
   AccessService::require('academico.matriculas.ver');
   $db=Container::get(Database::class)->connection();
@@ -49,6 +51,8 @@ final class CapacityRequestController {
     ORDER BY c.nombre,n.orden_nivel,p.codigo";
   $cohortStmt=$db->prepare($cohortSql);$cohortStmt->execute(['periodo'=>$period]);
   $cohorts=$cohortStmt->fetchAll();
+  $pending=$db->prepare("SELECT oferta_academica_id,nivel_academico_id,paralelo_id,COUNT(*) pendientes FROM solicitudes_cupos_cohorte WHERE estado='PENDIENTE' GROUP BY oferta_academica_id,nivel_academico_id,paralelo_id");$pending->execute();$pendingMap=[];foreach($pending->fetchAll() as $pr){$pendingMap[$pr['oferta_academica_id'].'-'.$pr['nivel_academico_id'].'-'.$pr['paralelo_id']]=(int)$pr['pendientes'];}
+  foreach($cohorts as &$co){$co['solicitudes_cohorte_pendientes']=$pendingMap[$co['oferta_id'].'-'.$co['nivel_id'].'-'.$co['paralelo_id']]??0;}unset($co);
   $flash=Session::get('capacity_flash');Session::set('capacity_flash',null);
   View::render('admin/academico/cupos/index',['title'=>'Control de cupos','sections'=>$q->fetchAll(),'cohorts'=>$cohorts,'periods'=>$periods,'period'=>$period,'search'=>$search,'flash'=>$flash]);
  }
@@ -70,4 +74,17 @@ final class CapacityRequestController {
   catch(Throwable $e){Session::set('capacity_flash',['type'=>'error','message'=>$e->getMessage()]);}
   Response::redirect('/admin/tic/cupos');
  }
+ public function requestCohort(Request $r):never{
+  $this->csrf($r);AccessService::require('academico.matriculas.gestionar');
+  try{$this->cohortRepo()->request((int)$r->input('oferta_id'),(int)$r->input('nivel_id'),(int)$r->input('paralelo_id'),(int)$r->input('cantidad'),trim((string)$r->input('motivo')),$this->actor());Session::set('capacity_flash',['type'=>'success','message'=>'Solicitud de cohorte enviada a Coordinación TICs.']);}
+  catch(Throwable $e){Session::set('capacity_flash',['type'=>'error','message'=>$e->getMessage()]);}
+  Response::redirect('/admin/academico/cupos');
+ }
+ public function resolveCohort(Request $r):never{
+  $this->csrf($r);AccessService::require('tic.cuentas.aprobar');
+  try{$this->cohortRepo()->resolve((int)$r->input('id'),(string)$r->input('decision')==='APROBAR',trim((string)$r->input('observacion')),$this->actor());Session::set('capacity_flash',['type'=>'success','message'=>'Solicitud de cohorte resuelta.']);}
+  catch(Throwable $e){Session::set('capacity_flash',['type'=>'error','message'=>$e->getMessage()]);}
+  Response::redirect('/admin/tic/cupos');
+ }
+
 }
