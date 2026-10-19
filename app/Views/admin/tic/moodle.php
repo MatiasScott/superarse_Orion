@@ -2,50 +2,36 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.1 · Vista previa académica (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.2.2 · Nombres académicos y reconocimiento de categorías y cursos (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php if (!$enabled): ?><div class="alert">La integración Moodle está deshabilitada en .env.</div><?php endif; ?>
-<?php if ($error !== null): ?><div class="alert error">No se pudo preparar el diagnóstico: <?= $e($error) ?></div><?php endif; ?>
-<div class="card">
-<h2>Estado de conexión</h2>
-<?php if ($site !== null): ?>
-<p><strong>Conectado correctamente.</strong></p>
-<table><tbody>
-<tr><th>Sitio</th><td><?= $e($site['sitename'] ?? 'No disponible') ?></td></tr>
-<tr><th>URL</th><td><?= $e($site['siteurl'] ?? 'No disponible') ?></td></tr>
-<tr><th>Usuario técnico (ID)</th><td><?= $e($site['userid'] ?? 'No disponible') ?></td></tr>
-<tr><th>Versión Moodle</th><td><?= $e($site['release'] ?? 'No disponible') ?></td></tr>
-</tbody></table>
-<?php endif; ?>
-<p>Esta pantalla no crea categorías, cursos, grupos ni matrículas. El token nunca se muestra.</p>
-</div>
-<div class="card">
-<h2>Estructura académica: Período → Carrera → Asignatura</h2>
-<p>Seleccione un período para comparar las ofertas y secciones activas de Orion con los cursos y categorías existentes en Moodle.</p>
-<form method="get" action="<?= $e($u) ?>/admin/tic/moodle">
-<label for="periodo">Período académico</label>
-<select id="periodo" name="periodo" required>
-<option value="">Seleccione...</option>
-<?php foreach ($periods as $period): ?>
-<option value="<?= (int)$period['id'] ?>" <?= isset($preview['period']['id']) && (int)$preview['period']['id'] === (int)$period['id'] ? 'selected' : '' ?>><?= $e($period['nombre']) ?> (<?= $e($period['codigo']) ?>) · <?= (int)$period['ofertas'] ?> ofertas</option>
-<?php endforeach; ?>
-</select>
-<button class="btn" type="submit">Ver vista previa</button>
-</form>
+<?php if ($error !== null): ?><div class="alert error">Error: <?= $e($error) ?></div><?php endif; ?>
+<div class="card"><h2>Estado de conexión</h2>
+<?php if ($site !== null): ?><p><strong>Conectado correctamente.</strong></p><table><tbody>
+<tr><th>Sitio</th><td><?= $e($site['sitename'] ?? '-') ?></td></tr>
+<tr><th>URL</th><td><?= $e($site['siteurl'] ?? '-') ?></td></tr>
+<tr><th>Usuario técnico (ID)</th><td><?= $e($site['userid'] ?? '-') ?></td></tr>
+<tr><th>Versión Moodle</th><td><?= $e($site['release'] ?? '-') ?></td></tr>
+</tbody></table><?php endif; ?>
+<p>No se muestran credenciales ni se crean categorías, cursos o matrículas.</p></div>
+<div class="card"><h2>Superarse → Período → Campus → Escuela → Carrera → [Modalidad] → Nivel → Cursos</h2>
+<form method="get" action="<?= $e($u) ?>/admin/tic/moodle"><label for="periodo">Período académico</label><select id="periodo" name="periodo" required><option value="">Seleccione...</option>
+<?php foreach ($periods as $p): ?><option value="<?= (int)$p['id'] ?>" <?= isset($preview['period']['id']) && (int)$preview['period']['id'] === (int)$p['id'] ? 'selected' : '' ?>><?= $e($p['nombre']) ?> (<?= $e($p['codigo']) ?>) · <?= (int)$p['ofertas'] ?> ofertas</option><?php endforeach; ?></select><button class="btn" type="submit">Ver vista previa</button></form>
 <?php if ($preview !== null): ?>
 <h3><?= $e($preview['period']['nombre']) ?></h3>
-<p><strong>Categoría período:</strong> <code><?= $e($preview['period_key']) ?></code> — <?= $preview['period_exists'] ? 'Existe en Moodle' : 'Pendiente de creación' ?></p>
-<p><strong>Carreras:</strong> <?= count($preview['careers']) ?> · <strong>Asignaturas con secciones activas:</strong> <?= (int)$preview['subjects_total'] ?></p>
-<?php foreach ($preview['careers'] as $entry): ?>
-<h4><?= $e($entry['career']['nombre']) ?> — <?= $entry['exists'] ? 'Categoría existente' : 'Categoría pendiente' ?></h4>
-<p><code><?= $e($entry['key']) ?></code></p>
-<?php if ($entry['subjects']): ?>
-<table><thead><tr><th>Asignatura</th><th>Código Orion</th><th>Clave de curso Moodle</th><th>Estado</th></tr></thead><tbody>
-<?php foreach ($entry['subjects'] as $subject): ?>
-<tr><td><?= $e($subject['name']) ?></td><td><?= $e($subject['code']) ?></td><td><code><?= $e($subject['key']) ?></code></td><td><?= $subject['exists'] ? 'Existente' : 'Pendiente' ?></td></tr>
-<?php endforeach; ?>
+<p><strong>Inventario Moodle:</strong> <?= (int)$preview['category_count'] ?> categorías · <?= (int)$preview['course_count'] ?> cursos. <strong>Raíz Superarse:</strong> <?= $preview['root_id'] === null ? 'No identificada' : '#'.(int)$preview['root_id'] ?>.</p>
+<?php foreach ($preview['warnings'] as $w): ?><div class="alert error"><?= $e($w) ?></div><?php endforeach; ?>
+<?php if (!$preview['rows']): ?><p>El período no tiene asignaturas con secciones activas.</p><?php endif; ?>
+<?php foreach ($preview['rows'] as $row): ?>
+<div class="card" style="margin-top:1rem"><h4><?= $e($row['display_name'] ?? $row['subject']['asignatura']) ?> <small>(<?= $e($row['subject']['asignatura_codigo']) ?>)</small></h4>
+<p><strong>Oferta #<?= (int)$row['subject']['oferta_id'] ?></strong> · Clave propuesta: <code><?= $e($row['key']) ?></code></p>
+<table><thead><tr><th>Ruta</th><th>Categoría</th><th>Estado</th></tr></thead><tbody>
+<?php foreach ($row['segments'] as $segment): ?><tr><td><?= $e($segment['label']) ?></td><td><?= $e($segment['moodle_name'] ?? $segment['name']) ?><?php if (isset($segment['moodle_name']) && $segment['moodle_name'] !== $segment['name']): ?> <small>(Orion: <?= $e($segment['name']) ?>)</small><?php endif; ?></td><td><?= $segment['moodle_id'] === null ? $e($segment['status']) : 'Existe · #'.(int)$segment['moodle_id'] ?></td></tr><?php endforeach; ?>
 </tbody></table>
-<?php else: ?><p>No hay secciones activas para esta carrera en el período.</p><?php endif; ?>
-<?php endforeach; ?>
-<p><strong>Modo seguro:</strong> vista previa únicamente. No se realizan cambios en Moodle ni en Orion.</p>
-<?php endif; ?>
+<?php foreach ($row['blocked'] as $b): ?><p><strong>Requiere revisión:</strong> <?= $e($b) ?></p><?php endforeach; ?>
+<p><strong>Estado de conciliación:</strong> <?= $e(str_replace('_', ' ', $row['course_status'])) ?> · <strong>Categoría de nivel:</strong> <?= $row['category_id'] === null ? 'Pendiente' : '#'.(int)$row['category_id'] ?></p>
+<p><strong>Curso con clave exacta:</strong> <?= $row['course_id'] !== null ? '#'.(int)$row['course_id'] : 'No identificado' ?></p>
+<?php if ($row['suggestions']): ?><details><summary>Posibles cursos existentes por nombre o código (<?= (int)$row['suggestion_total'] ?>) — requieren revisión manual</summary><ul><?php foreach ($row['suggestions'] as $s): ?><li>#<?= (int)$s['id'] ?> · <?= $e($s['name']) ?> · categoría #<?= (int)$s['category'] ?> · <?= $s['same_category'] ? 'MISMO NIVEL' : 'OTRA CATEGORÍA' ?> · <?= $s['name_match'] ? 'nombre coincide' : 'nombre distinto' ?><?= $s['code_match'] ? ' · código coincide' : '' ?></li><?php endforeach; ?></ul></details><?php endif; ?>
 </div>
+<?php endforeach; ?>
+<p><strong>Modo seguro:</strong> <?= $e($preview['notice']) ?></p>
+<?php endif; ?></div>
