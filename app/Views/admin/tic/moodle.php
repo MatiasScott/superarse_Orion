@@ -2,7 +2,7 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.4 · Vinculación y sincronización controlada de categorías</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.5 · Creación controlada de cursos</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php if (!$enabled): ?><div class="alert">La integración Moodle está deshabilitada en .env.</div><?php endif; ?>
 <?php if (!empty($linkNotice)): ?><div class="alert"><?= $e($linkNotice) ?></div><?php endif; ?>
 <?php if ($error !== null): ?><div class="alert error">Error: <?= $e($error) ?></div><?php endif; ?>
@@ -13,7 +13,7 @@ $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QU
 <tr><th>Usuario técnico (ID)</th><td><?= $e($site['userid'] ?? '-') ?></td></tr>
 <tr><th>Versión Moodle</th><td><?= $e($site['release'] ?? '-') ?></td></tr>
 </tbody></table><?php endif; ?>
-<p>No se muestran credenciales. La creación de categorías requiere confirmación; no se crean cursos ni matrículas.</p></div>
+<p>No se muestran credenciales. La creación de categorías requiere confirmación; los cursos nuevos se crean ocultos y sin matrículas, previa confirmación.</p></div>
 <div class="card"><h2>Superarse → Período → Campus → Escuela → Carrera → [Modalidad] → Nivel → Cursos</h2>
 <form method="get" action="<?= $e($u) ?>/admin/tic/moodle"><label for="periodo">Período académico</label><select id="periodo" name="periodo" required><option value="">Seleccione...</option>
 <?php foreach ($periods as $p): ?><option value="<?= (int)$p['id'] ?>" <?= isset($preview['period']['id']) && (int)$preview['period']['id'] === (int)$p['id'] ? 'selected' : '' ?>><?= $e($p['nombre']) ?> (<?= $e($p['codigo']) ?>) · <?= (int)$p['ofertas'] ?> ofertas</option><?php endforeach; ?></select><button class="btn" type="submit">Ver vista previa</button></form>
@@ -55,6 +55,19 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 <p><strong>Estado de conciliación:</strong> <?= $e(str_replace('_', ' ', $row['course_status'])) ?> · <strong>Categoría de nivel:</strong> <?= $row['category_id'] === null ? 'Pendiente' : '#'.(int)$row['category_id'] ?></p>
 <?php if ($row['saved_mapping']): ?><p><strong>Vinculado en Orion:</strong> curso Moodle #<?= (int)$row['saved_mapping']['moodle_course_id'] ?> · <?= $e($row['saved_mapping']['fullname_moodle']) ?></p><?php endif; ?>
 <p><strong>Curso con clave exacta:</strong> <?= $row['course_id'] !== null ? '#'.(int)$row['course_id'] : 'No identificado' ?></p>
+<?php if (!$row['saved_mapping'] && !$row['blocked'] && $row['category_id'] &&
+    $row['exact_count'] === 0 && $row['any_candidate_count'] === 0): ?>
+<p><strong>Curso faltante:</strong> no hay coincidencias en Moodle. Se puede proponer un curso nuevo, inicialmente oculto.</p>
+<?php if ($syncEnabled && !$preview['warnings']): ?>
+<form method="post" action="<?= $e($u) ?>/admin/tic/moodle/crear-curso" data-moodle-create-course="1" data-course-name="<?= $e($row['display_name']) ?>" data-course-level="<?= (int)$row['category_id'] ?>">
+<input type="hidden" name="_csrf" value="<?= $e(\App\Core\Csrf::token()) ?>">
+<input type="hidden" name="periodo" value="<?= (int)$preview['period']['id'] ?>">
+<input type="hidden" name="oferta_id" value="<?= (int)$row['subject']['oferta_id'] ?>">
+<input type="hidden" name="asignatura_id" value="<?= (int)$row['subject']['asignatura_id'] ?>">
+<input type="hidden" name="confirmacion" value="CREAR_CURSO">
+<button type="submit" class="btn small">Crear curso en Moodle</button></form>
+<?php else: ?><p class="muted">Creación deshabilitada. Requiere MOODLE_SYNC_ENABLED=true y permiso TIC de aprobación.</p><?php endif; ?>
+<?php endif; ?>
 <?php if ($row['suggestions'] && !$row['saved_mapping']): ?><details><summary>Posibles cursos existentes por nombre o código (<?= (int)$row['suggestion_total'] ?>) — requieren revisión manual</summary><ul><?php foreach ($row['suggestions'] as $s): ?><li>#<?= (int)$s['id'] ?> · <?= $e($s['name']) ?> · categoría #<?= (int)$s['category'] ?> · <?= $s['same_category'] ? 'MISMO NIVEL' : 'OTRA CATEGORÍA' ?> · <?= $s['name_match'] ? 'nombre coincide' : 'nombre distinto' ?><?= $s['code_match'] ? ' · código coincide' : '' ?>
 <?php if (!$row['saved_mapping'] && !$row['blocked'] && $s['same_category'] && $s['name_match']): ?>
 <form method="post" action="<?= $e($u) ?>/admin/tic/moodle/vincular" style="display:inline-block;margin-left:1rem" data-moodle-link-form="1" data-moodle-course-id="<?= (int)$s['id'] ?>">
@@ -156,5 +169,41 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
   modal.querySelectorAll('[data-category-close]').forEach(b => b.addEventListener('click', close));
   document.addEventListener('keydown', e => { if (modal.classList.contains('is-open') && e.key === 'Escape') close(); });
   accept.addEventListener('click', () => { accept.disabled = true; accept.textContent = 'Sincronizando…'; form.submit(); });
+})();
+</script>
+
+<div class="orion-modal" id="moodleCreateCourseModal" aria-hidden="true">
+  <div class="orion-modal-backdrop" data-create-course-close></div>
+  <div class="orion-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="moodleCreateCourseTitle">
+    <button type="button" class="orion-modal-x" data-create-course-close aria-label="Cerrar">×</button>
+    <span class="eyebrow">TIC · MOODLE</span>
+    <h2 id="moodleCreateCourseTitle">Crear curso en Moodle</h2>
+    <p>Curso: <strong id="moodleCreateCourseName"></strong></p>
+    <p>Categoría de nivel: <strong id="moodleCreateCourseCategory"></strong></p>
+    <p class="muted">Se creará un curso nuevo, inicialmente oculto, y se vinculará con Orion. No se matricularán estudiantes ni docentes. Esta acción modifica Moodle.</p>
+    <div class="modal-actions"><button type="button" class="btn secondary" data-create-course-close>Cancelar</button><button type="button" class="btn" id="moodleCreateCourseAccept">Sí, crear curso</button></div>
+  </div>
+</div>
+<script>
+(() => {
+  'use strict';
+  const modal = document.getElementById('moodleCreateCourseModal');
+  const accept = document.getElementById('moodleCreateCourseAccept');
+  if (!modal || !accept) return;
+  let pending = null, opener = null;
+  const close = () => {
+    modal.classList.remove('is-open'); modal.setAttribute('aria-hidden','true');
+    document.body.classList.remove('modal-open'); pending = null;
+    if (opener && opener.isConnected) opener.focus();
+  };
+  document.querySelectorAll('[data-moodle-create-course]').forEach(form => form.addEventListener('submit', e => {
+    e.preventDefault(); pending = form; opener = e.submitter || form.querySelector('button');
+    document.getElementById('moodleCreateCourseName').textContent = form.dataset.courseName;
+    document.getElementById('moodleCreateCourseCategory').textContent = '#' + form.dataset.courseLevel;
+    modal.classList.add('is-open'); modal.setAttribute('aria-hidden','false'); document.body.classList.add('modal-open'); accept.focus();
+  }));
+  modal.querySelectorAll('[data-create-course-close]').forEach(button => button.addEventListener('click', close));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('is-open')) close(); });
+  accept.addEventListener('click', () => { if (!pending) return; const form = pending; pending = null; accept.disabled = true; form.submit(); });
 })();
 </script>

@@ -65,6 +65,26 @@ final class MoodleRestClient
         return $result[0];
     }
 
+    /** Crea un curso vacío bajo una categoría validada. Nunca inscribe usuarios. */
+    public function createCourse(string $name, string $shortname, string $idnumber, int $categoryId, int $startDate, int $endDate): array
+    {
+        if (!filter_var($_ENV['MOODLE_SYNC_ENABLED'] ?? false, FILTER_VALIDATE_BOOL)) {
+            throw new RuntimeException('Sincronización Moodle deshabilitada.');
+        }
+        if ($categoryId < 1 || trim($name) === '' || trim($shortname) === '' || trim($idnumber) === '') {
+            throw new RuntimeException('Datos de curso incompletos.');
+        }
+        $course = ['fullname'=>$name, 'shortname'=>$shortname, 'idnumber'=>$idnumber,
+            'categoryid'=>$categoryId, 'format'=>'topics', 'visible'=>0,
+            'startdate'=>$startDate > 0 ? $startDate : time()];
+        if ($endDate > $startDate && $startDate > 0) $course['enddate'] = $endDate;
+        $result = $this->call('core_course_create_courses', ['courses'=>[$course]]);
+        if (!isset($result[0]['id']) || (int)$result[0]['id'] < 1) {
+            throw new RuntimeException('Moodle no confirmó el ID del curso creado.');
+        }
+        return $result[0];
+    }
+
     private function read(string $function): array
     {
         return $this->call($function, []);

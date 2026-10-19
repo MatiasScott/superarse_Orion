@@ -167,6 +167,8 @@ final class MoodleAcademicPreview
                 'course_id'=>count($exact) === 1 ? (int)$exact[0]['id'] : null,
                 'suggestions'=>array_slice($suggestions,0,15), 'suggestion_total'=>count($suggestions),
                 'course_status'=>$courseStatus, 'category_id'=>$parentId,
+                'exact_count'=>count($exact), 'local_candidate_count'=>count($local),
+                'any_candidate_count'=>count($suggestions),
             ];
         }
         return ['period'=>$period,'root_id'=>$rootId,'period_category_id'=>$periodCategory['id'] ?? null,

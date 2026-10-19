@@ -12,6 +12,7 @@ use App\Core\Database;
 use App\Integrations\Moodle\MoodleRestClient;
 use App\Integrations\Moodle\MoodleAcademicPreview;
 use App\Integrations\Moodle\MoodleCategorySync;
+use App\Integrations\Moodle\MoodleCourseSync;
 use App\Services\AccessService;
 use Throwable;
 
@@ -85,6 +86,31 @@ final class MoodleIntegrationController
         } catch (Throwable $e) {
             // Puede existir una sincronización parcial; cada reintento vuelve a consultar Moodle.
             Session::set('moodle_link_notice', 'Sincronización interrumpida: '.$e->getMessage().' Revise Moodle antes de reintentar.');
+        }
+        Response::redirect('/admin/tic/moodle?periodo='.$periodId);
+    }
+
+    public function createCourse(Request $request): never
+    {
+        AccessService::require('tic.cuentas.aprobar');
+        if (!Csrf::validate((string)$request->input('_csrf'))) Response::abort(419, 'CSRF inválido.');
+        if (!filter_var($_ENV['MOODLE_SYNC_ENABLED'] ?? false, FILTER_VALIDATE_BOOL)) Response::abort(403, 'Sincronización deshabilitada.');
+        $periodId = (int)$request->input('periodo');
+        $offerId = (int)$request->input('oferta_id');
+        $subjectId = (int)$request->input('asignatura_id');
+        if ($periodId < 1 || $offerId < 1 || $subjectId < 1 || (string)$request->input('confirmacion') !== 'CREAR_CURSO') {
+            Response::abort(422, 'Confirmación inválida.');
+        }
+        try {
+            $db = (new Database(new Config($_ENV)))->connection();
+            $client = new MoodleRestClient($_ENV);
+            $preview = (new MoodleAcademicPreview($db, $client))->preview($periodId);
+            $user = (array)Session::get('auth_user', []);
+            $actor = isset($user['id']) ? (int)$user['id'] : null;
+            $id = (new MoodleCourseSync($db, $client))->create($preview, $periodId, $offerId, $subjectId, $actor);
+            Session::set('moodle_link_notice', 'Curso Moodle #'.$id.' creado oculto y vinculado en Orion.');
+        } catch (Throwable $e) {
+            Session::set('moodle_link_notice', 'No se completó la creación: '.$e->getMessage());
         }
         Response::redirect('/admin/tic/moodle?periodo='.$periodId);
     }
