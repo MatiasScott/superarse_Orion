@@ -45,6 +45,13 @@ final class MoodleRestClient
         return $this->read('core_course_get_courses');
     }
 
+    /** Grupos del curso, lectura exclusiva por REST. */
+    public function courseGroups(int $courseId): array
+    {
+        if ($courseId < 1) throw new RuntimeException('ID de curso inválido.');
+        return $this->call('core_group_get_course_groups', ['courseid' => $courseId]);
+    }
+
     /** Escritura explícita: la sincronización debe estar habilitada por configuración. */
     public function createCategory(string $name, int $parentId, string $idnumber): array
     {

@@ -109,6 +109,7 @@ final class MoodleAcademicPreview
         $periodCandidates = $rootId !== null ? $this->children($byParent, $rootId, (string)$period['nombre']) : [];
         $periodCategory = count($periodCandidates) === 1 ? $periodCandidates[0] : null;
         if (count($periodCandidates) > 1) { $warnings[] = 'Hay varias categorías de período con el mismo nombre normalizado.'; }
+        $groupsCache = [];
         $rows = [];
         foreach ($subjects as $subject) {
             $segments = [
@@ -181,6 +182,20 @@ final class MoodleAcademicPreview
             ));
             $saved = $this->savedMapping((int)$subject['oferta_id'], (int)$subject['asignatura_id']);
             $subjectSections = $sectionsBySubject[(int)$subject['oferta_id'].':'.(int)$subject['asignatura_id']] ?? [];
+            $groupCourseId = (int)($saved['moodle_course_id'] ?? (count($exact) === 1 ? ($exact[0]['id'] ?? 0) : 0));
+            $groupReadError = null;
+            $remoteGroups = [];
+            if ($groupCourseId > 0) {
+                if (!array_key_exists($groupCourseId, $groupsCache)) {
+                    try {
+                        $groupsCache[$groupCourseId] = ['groups'=>$this->moodle->courseGroups($groupCourseId), 'error'=>null];
+                    } catch (\Throwable $ex) {
+                        $groupsCache[$groupCourseId] = ['groups'=>[], 'error'=>$ex->getMessage()];
+                    }
+                }
+                $remoteGroups = $groupsCache[$groupCourseId]['groups'];
+                $groupReadError = $groupsCache[$groupCourseId]['error'];
+            }
             $groupPlan = [];
             $usedNames = [];
             foreach ($subjectSections as $section) {
@@ -192,7 +207,19 @@ final class MoodleAcademicPreview
                 $nameKey = mb_strtolower($groupName, 'UTF-8');
                 $duplicate = isset($usedNames[$nameKey]);
                 $usedNames[$nameKey] = true;
+                $matches = [];
+                if ($groupCourseId > 0 && $groupReadError === null) {
+                    foreach ($remoteGroups as $remoteGroup) {
+                        if (self::norm((string)($remoteGroup['name'] ?? '')) === self::norm($groupName)) {
+                            $matches[] = $remoteGroup;
+                        }
+                    }
+                }
                 $groupPlan[] = [
+                    'moodle_matches'=>$matches,
+                    'comparison_status'=>$groupCourseId <= 0 ? 'curso_pendiente' :
+                        ($groupReadError !== null ? 'consulta_fallida' :
+                        (count($matches) > 1 ? 'ambiguo' : (count($matches) === 1 ? 'encontrado' : 'faltante'))),
                     'section_id'=>(int)$section['id'],
                     'section_code'=>(string)$section['seccion_codigo'],
                     'parallel_code'=>(string)($section['paralelo_codigo'] ?? ''),
@@ -202,7 +229,7 @@ final class MoodleAcademicPreview
                         (empty($section['paralelo_id']) ? 'Sección sin paralelo asignado' : ''),
                 ];
             }
-            $rows[] = ['group_plan'=>$groupPlan,
+            $rows[] = ['group_course_id'=>$groupCourseId, 'group_read_error'=>$groupReadError, 'remote_group_count'=>count($remoteGroups), 'group_plan'=>$groupPlan,
 
                 'saved_mapping'=>$saved, 'subject'=>$subject, 'display_name'=>$displayName, 'segments'=>$segments,'key'=>$key,'blocked'=>$blocked,
                 'course_id'=>count($exact) === 1 ? (int)$exact[0]['id'] : null,
