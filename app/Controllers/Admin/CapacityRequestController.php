@@ -24,8 +24,33 @@ final class CapacityRequestController {
   if($search!==''){$sql.=" AND (s.codigo LIKE :q1 OR s.nombre LIKE :q2 OR oa.nombre LIKE :q3)";$params['q1']='%'.$search.'%';$params['q2']='%'.$search.'%';$params['q3']='%'.$search.'%';}
   $sql.=' ORDER BY oa.nombre,s.nombre,s.id LIMIT 300';
   $q=$db->prepare($sql);$q->execute($params);
+  // Cohortes por oferta (período/carrera/sede/modalidad), nivel y paralelo.
+  // Cuenta trayectorias estudiantiles únicas, aunque cursen varias asignaturas.
+  $cohortSql="SELECT oa.id oferta_id,oa.nombre oferta_nombre, c.nombre carrera_nombre,
+    n.id nivel_id,n.nombre nivel_nombre,n.orden_nivel,p.id paralelo_id,p.codigo paralelo,
+    COUNT(DISTINCT s.id) secciones_total,
+    MIN(s.cupo_maximo) cupo_minimo,MAX(s.cupo_maximo) cupo_maximo,
+    COUNT(DISTINCT CASE WHEN m.activo=1 AND em.codigo IN ('CONFIRMADA','EN_CURSO','PENDIENTE_FINANCIERO','PENDIENTE_VALIDACION')
+       AND ma.activo=1 AND ema.codigo<>'ANULADA' THEN m.estudiante_carrera_id END) estudiantes_unicos,
+    COUNT(DISTINCT CASE WHEN sc.estado='PENDIENTE' THEN sc.id END) solicitudes_pendientes
+    FROM secciones s
+    JOIN ofertas_academicas oa ON oa.id=s.oferta_academica_id
+    JOIN carreras c ON c.id=oa.carrera_id
+    JOIN malla_asignaturas mas ON mas.id=s.malla_asignatura_id
+    JOIN niveles_academicos n ON n.id=mas.nivel_academico_id
+    LEFT JOIN paralelos p ON p.id=s.paralelo_id
+    LEFT JOIN matricula_asignaturas ma ON ma.seccion_id=s.id AND ma.activo=1
+    LEFT JOIN estados_matricula_asignatura ema ON ema.id=ma.estado_matricula_asignatura_id
+    LEFT JOIN matriculas m ON m.id=ma.matricula_id
+    LEFT JOIN estados_matricula em ON em.id=m.estado_matricula_id
+    LEFT JOIN solicitudes_ampliacion_cupos sc ON sc.seccion_id=s.id AND sc.estado='PENDIENTE'
+    WHERE s.deleted_at IS NULL AND s.activo=1 AND oa.periodo_academico_id=:periodo
+    GROUP BY oa.id,oa.nombre,c.nombre,n.id,n.nombre,n.orden_nivel,p.id,p.codigo
+    ORDER BY c.nombre,n.orden_nivel,p.codigo";
+  $cohortStmt=$db->prepare($cohortSql);$cohortStmt->execute(['periodo'=>$period]);
+  $cohorts=$cohortStmt->fetchAll();
   $flash=Session::get('capacity_flash');Session::set('capacity_flash',null);
-  View::render('admin/academico/cupos/index',['title'=>'Control de cupos','sections'=>$q->fetchAll(),'periods'=>$periods,'period'=>$period,'search'=>$search,'flash'=>$flash]);
+  View::render('admin/academico/cupos/index',['title'=>'Control de cupos','sections'=>$q->fetchAll(),'cohorts'=>$cohorts,'periods'=>$periods,'period'=>$period,'search'=>$search,'flash'=>$flash]);
  }
  public function request(Request $r):never{
   $this->csrf($r);AccessService::require('academico.matriculas.gestionar');$id=(int)$r->input('seccion_id');
