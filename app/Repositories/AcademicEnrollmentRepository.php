@@ -448,6 +448,12 @@ final class AcademicEnrollmentRepository
                     break;
                 }
                 if (!$valid) throw new RuntimeException('Una de las secciones seleccionadas ya no está disponible.');
+                // La sección ya está bloqueada FOR UPDATE en esta transacción.
+                // Verificación independiente del cálculo de la vista previa.
+                $cap = $this->db->prepare("SELECT s.cupo_maximo,(SELECT COUNT(*) FROM matricula_asignaturas ma JOIN estados_matricula_asignatura em ON em.id=ma.estado_matricula_asignatura_id WHERE ma.seccion_id=s.id AND ma.activo=1 AND em.codigo<>'ANULADA') ocupados FROM secciones s WHERE s.id=?");
+                $cap->execute([$section]);$capacity=$cap->fetch();
+                if(!$capacity || $capacity['cupo_maximo']===null || (int)$capacity['ocupados'] >= (int)$capacity['cupo_maximo']) throw new RuntimeException('Cupo máximo alcanzado. Solicita ampliación a Coordinación TICs.');
+
                 $attempt = (int)$subject['attempt']['next'];
                 $ins = $this->db->prepare(
                     "INSERT INTO matricula_asignaturas(matricula_id,seccion_id,malla_asignatura_id,estado_matricula_asignatura_id,numero_intento,materia_pendiente,reconocimiento_aplicado,creada_por_usuario_id,observacion,activo) 

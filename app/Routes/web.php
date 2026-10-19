@@ -194,3 +194,11 @@ $router->get('/admin/tic/moodle', [\App\Controllers\Admin\MoodleIntegrationContr
 $router->post('/admin/tic/moodle/vincular', [\App\Controllers\Admin\MoodleIntegrationController::class, 'link']);
 $router->post('/admin/tic/moodle/sincronizar-categorias', [\App\Controllers\Admin\MoodleIntegrationController::class, 'syncCategories']);
 $router->post('/admin/tic/moodle/crear-curso', [\App\Controllers\Admin\MoodleIntegrationController::class, 'createCourse']);
+
+// Orion v0.11.10 — panel académico independiente de cupos
+$router->get('/admin/academico/cupos', [\App\Controllers\Admin\CapacityRequestController::class, 'academicIndex']);
+// Orion v0.11.9 — cupos adicionales
+$router->get('/admin/academico/cupos/solicitar', [\App\Controllers\Admin\CapacityRequestController::class, 'form']);
+$router->post('/admin/academico/cupos/solicitar', [\App\Controllers\Admin\CapacityRequestController::class, 'request']);
+$router->get('/admin/tic/cupos', [\App\Controllers\Admin\CapacityRequestController::class, 'index']);
+$router->post('/admin/tic/cupos/resolver', [\App\Controllers\Admin\CapacityRequestController::class, 'resolve']);

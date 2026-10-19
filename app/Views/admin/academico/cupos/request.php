@@ -1,0 +1,11 @@
+<?php $u=rtrim($_ENV['APP_URL']??'','/');$full=$section['cupo_maximo']!==null && (int)$section['ocupados']>=(int)$section['cupo_maximo'];?>
+<div class="page-head"><div><span class="eyebrow">ACADÉMICO · CUPOS</span><h1>Solicitud de ampliación</h1><p><?=htmlspecialchars($section['codigo'].' · '.$section['nombre'])?></p></div></div>
+<section class="card"><p>Ocupación: <strong><?=(int)$section['ocupados']?> / <?=htmlspecialchars((string)$section['cupo_maximo'])?></strong></p>
+<?php if($flash):?><p><?=htmlspecialchars($flash['message'])?></p><?php endif;?>
+<?php if($full):?><button type="button" class="btn" id="capacityOpen">Solicitar cupos adicionales</button><?php else:?><p>La sección todavía dispone de cupos. No se puede solicitar ampliación.</p><?php endif;?></section>
+<div id="capacityModal" hidden style="position:fixed;inset:0;background:#0009;z-index:9999;display:none;align-items:center;justify-content:center;padding:1rem" role="dialog" aria-modal="true" aria-labelledby="capacityTitle">
+ <div class="card" style="width:min(100%,520px);max-height:90vh;overflow:auto"><h2 id="capacityTitle">Solicitar cupos adicionales</h2><p>Esta sección alcanzó su capacidad. Coordinación TICs deberá aprobar la ampliación.</p>
+ <form method="post" action="<?=$u?>/admin/academico/cupos/solicitar"><input type="hidden" name="_csrf" value="<?=htmlspecialchars(\App\Core\Csrf::token())?>"><input type="hidden" name="seccion_id" value="<?=(int)$section['id']?>">
+ <label>Cupos adicionales<input type="number" name="cantidad" min="1" max="100" required></label><label>Justificación<textarea name="motivo" minlength="10" required></textarea></label>
+ <div style="display:flex;gap:.7rem"><button type="button" class="btn" onclick="closeCapacityModal()">Cancelar</button><button class="btn">Enviar solicitud</button></div></form></div></div>
+<script>const capacityModal=document.getElementById('capacityModal');function closeCapacityModal(){capacityModal.hidden=true;capacityModal.style.display='none'}document.getElementById('capacityOpen').addEventListener('click',()=>{capacityModal.hidden=false;capacityModal.style.display='flex'});capacityModal.addEventListener('click',e=>{if(e.target===capacityModal)closeCapacityModal()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCapacityModal()});</script>
