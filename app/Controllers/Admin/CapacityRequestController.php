@@ -17,7 +17,7 @@ final class CapacityRequestController {
   $periods=$db->query("SELECT id,nombre FROM periodos_academicos WHERE deleted_at IS NULL ORDER BY fecha_inicio DESC LIMIT 30")->fetchAll();
   if($period===0 && $periods){$period=(int)$periods[0]['id'];}
   $sql="SELECT s.id,s.codigo,s.nombre,s.cupo_maximo,s.permite_matricula,p.codigo paralelo,oa.nombre oferta_nombre,pa.nombre periodo_nombre,c.nombre carrera_nombre,n.orden_nivel,
-   (SELECT COUNT(DISTINCT ma.matricula_id) FROM matricula_asignaturas ma JOIN estados_matricula_asignatura em ON em.id=ma.estado_matricula_asignatura_id WHERE ma.seccion_id=s.id AND ma.activo=1 AND em.codigo<>'ANULADA') ocupados,
+   (SELECT COUNT(DISTINCT ma.matricula_id) FROM matricula_asignaturas ma JOIN estados_matricula_asignatura em ON em.id=ma.estado_matricula_asignatura_id JOIN matriculas m ON m.id=ma.matricula_id JOIN estados_matricula emm ON emm.id=m.estado_matricula_id WHERE ma.seccion_id=s.id AND ma.activo=1 AND m.activo=1 AND em.codigo<>'ANULADA' AND emm.codigo<>'ANULADA') ocupados,
    (SELECT COUNT(*) FROM solicitudes_ampliacion_cupos sc WHERE sc.seccion_id=s.id AND sc.estado='PENDIENTE') pendientes
    FROM secciones s JOIN ofertas_academicas oa ON oa.id=s.oferta_academica_id JOIN periodos_academicos pa ON pa.id=oa.periodo_academico_id JOIN carreras c ON c.id=oa.carrera_id JOIN malla_asignaturas mas ON mas.id=s.malla_asignatura_id JOIN niveles_academicos n ON n.id=mas.nivel_academico_id LEFT JOIN paralelos p ON p.id=s.paralelo_id WHERE s.deleted_at IS NULL AND s.activo=1 AND oa.periodo_academico_id=:periodo";
   $params=['periodo'=>$period];
@@ -35,7 +35,7 @@ final class CapacityRequestController {
  }
  public function form(Request $r):void{
   AccessService::require('academico.matriculas.gestionar');$id=(int)$r->input('seccion_id');
-  $db=Container::get(Database::class)->connection();$q=$db->prepare("SELECT s.id,s.codigo,s.nombre,s.cupo_maximo,(SELECT COUNT(*) FROM matricula_asignaturas ma JOIN estados_matricula_asignatura em ON em.id=ma.estado_matricula_asignatura_id WHERE ma.seccion_id=s.id AND ma.activo=1 AND em.codigo<>'ANULADA') ocupados FROM secciones s WHERE s.id=? AND s.deleted_at IS NULL");$q->execute([$id]);$section=$q->fetch();if(!$section)Response::abort(404,'Sección no encontrada.');
+  $db=Container::get(Database::class)->connection();$q=$db->prepare("SELECT s.id,s.codigo,s.nombre,s.cupo_maximo,(SELECT COUNT(DISTINCT ma.matricula_id) FROM matricula_asignaturas ma JOIN estados_matricula_asignatura em ON em.id=ma.estado_matricula_asignatura_id JOIN matriculas m ON m.id=ma.matricula_id JOIN estados_matricula emm ON emm.id=m.estado_matricula_id WHERE ma.seccion_id=s.id AND ma.activo=1 AND m.activo=1 AND em.codigo<>'ANULADA' AND emm.codigo<>'ANULADA') ocupados FROM secciones s WHERE s.id=? AND s.deleted_at IS NULL");$q->execute([$id]);$section=$q->fetch();if(!$section)Response::abort(404,'Sección no encontrada.');
   $flash=Session::get('capacity_flash');Session::set('capacity_flash',null);
   View::render('admin/academico/cupos/request',['title'=>'Solicitud de cupos adicionales','section'=>$section,'flash'=>$flash]);
  }

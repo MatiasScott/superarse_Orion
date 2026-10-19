@@ -10,8 +10,9 @@ final class CapacityRequestRepository {
   if($section<1||$quantity<1||$quantity>100||mb_strlen($reason)<10||$actor<1)throw new RuntimeException('Indica entre 1 y 100 cupos, y una justificación de al menos 10 caracteres.');
   $this->db->beginTransaction();try{
    $s=$this->db->prepare('SELECT id,cupo_maximo FROM secciones WHERE id=? AND activo=1 AND deleted_at IS NULL FOR UPDATE');$s->execute([$section]);$sec=$s->fetch();if(!$sec)throw new RuntimeException('Sección inexistente o inactiva.');
-   $q=$this->db->prepare("SELECT COUNT(*) FROM matricula_asignaturas ma JOIN estados_matricula_asignatura em ON em.id=ma.estado_matricula_asignatura_id WHERE ma.seccion_id=? AND ma.activo=1 AND em.codigo<>'ANULADA'");$q->execute([$section]);$occupied=(int)$q->fetchColumn();
-   if($sec['cupo_maximo']===null || $occupied<(int)$sec['cupo_maximo'])throw new RuntimeException('La sección aún tiene cupos disponibles.');
+   $q=$this->db->prepare("SELECT COUNT(DISTINCT ma.matricula_id) FROM matricula_asignaturas ma JOIN estados_matricula_asignatura em ON em.id=ma.estado_matricula_asignatura_id JOIN matriculas m ON m.id=ma.matricula_id JOIN estados_matricula emm ON emm.id=m.estado_matricula_id WHERE ma.seccion_id=? AND ma.activo=1 AND m.activo=1 AND em.codigo<>'ANULADA' AND emm.codigo<>'ANULADA'");$q->execute([$section]);$occupied=(int)$q->fetchColumn();
+   if($sec['cupo_maximo']===null || (int)$sec['cupo_maximo']<=0)throw new RuntimeException('La sección no tiene un cupo autorizado válido.');
+   if($occupied<(int)$sec['cupo_maximo'])throw new RuntimeException('La sección aún tiene cupos disponibles.');
    $q=$this->db->prepare("SELECT COUNT(*) FROM solicitudes_ampliacion_cupos WHERE seccion_id=? AND estado='PENDIENTE'");$q->execute([$section]);if((int)$q->fetchColumn()>0)throw new RuntimeException('Ya existe una solicitud pendiente para esta sección.');
    $i=$this->db->prepare("INSERT INTO solicitudes_ampliacion_cupos(seccion_id,cantidad_solicitada,motivo,solicitado_por_usuario_id) VALUES(?,?,?,?)");$i->execute([$section,$quantity,$reason,$actor]);$this->db->commit();
   }catch(Throwable $e){$this->db->rollBack();throw $e;}
