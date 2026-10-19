@@ -189,3 +189,6 @@ $router->get('/estudiante/financiero/comprobante', [\App\Controllers\Student\Stu
 
 // v0.11.0 - Diagnóstico Moodle (solo lectura, protegido por TIC)
 $router->get('/admin/tic/moodle', [\App\Controllers\Admin\MoodleIntegrationController::class, 'index']);
+
+// v0.11.3 - Vinculación confirmada por TIC; no escribe en Moodle.
+$router->post('/admin/tic/moodle/vincular', [\App\Controllers\Admin\MoodleIntegrationController::class, 'link']);

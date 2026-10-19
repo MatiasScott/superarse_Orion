@@ -2,8 +2,9 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.2.2 · Nombres académicos y reconocimiento de categorías y cursos (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.3 · Vinculación confirmada de cursos (sin escrituras en Moodle)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php if (!$enabled): ?><div class="alert">La integración Moodle está deshabilitada en .env.</div><?php endif; ?>
+<?php if (!empty($linkNotice)): ?><div class="alert"><?= $e($linkNotice) ?></div><?php endif; ?>
 <?php if ($error !== null): ?><div class="alert error">Error: <?= $e($error) ?></div><?php endif; ?>
 <div class="card"><h2>Estado de conexión</h2>
 <?php if ($site !== null): ?><p><strong>Conectado correctamente.</strong></p><table><tbody>
@@ -29,8 +30,18 @@ $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QU
 </tbody></table>
 <?php foreach ($row['blocked'] as $b): ?><p><strong>Requiere revisión:</strong> <?= $e($b) ?></p><?php endforeach; ?>
 <p><strong>Estado de conciliación:</strong> <?= $e(str_replace('_', ' ', $row['course_status'])) ?> · <strong>Categoría de nivel:</strong> <?= $row['category_id'] === null ? 'Pendiente' : '#'.(int)$row['category_id'] ?></p>
+<?php if ($row['saved_mapping']): ?><p><strong>Vinculado en Orion:</strong> curso Moodle #<?= (int)$row['saved_mapping']['moodle_course_id'] ?> · <?= $e($row['saved_mapping']['fullname_moodle']) ?></p><?php endif; ?>
 <p><strong>Curso con clave exacta:</strong> <?= $row['course_id'] !== null ? '#'.(int)$row['course_id'] : 'No identificado' ?></p>
-<?php if ($row['suggestions']): ?><details><summary>Posibles cursos existentes por nombre o código (<?= (int)$row['suggestion_total'] ?>) — requieren revisión manual</summary><ul><?php foreach ($row['suggestions'] as $s): ?><li>#<?= (int)$s['id'] ?> · <?= $e($s['name']) ?> · categoría #<?= (int)$s['category'] ?> · <?= $s['same_category'] ? 'MISMO NIVEL' : 'OTRA CATEGORÍA' ?> · <?= $s['name_match'] ? 'nombre coincide' : 'nombre distinto' ?><?= $s['code_match'] ? ' · código coincide' : '' ?></li><?php endforeach; ?></ul></details><?php endif; ?>
+<?php if ($row['suggestions']): ?><details><summary>Posibles cursos existentes por nombre o código (<?= (int)$row['suggestion_total'] ?>) — requieren revisión manual</summary><ul><?php foreach ($row['suggestions'] as $s): ?><li>#<?= (int)$s['id'] ?> · <?= $e($s['name']) ?> · categoría #<?= (int)$s['category'] ?> · <?= $s['same_category'] ? 'MISMO NIVEL' : 'OTRA CATEGORÍA' ?> · <?= $s['name_match'] ? 'nombre coincide' : 'nombre distinto' ?><?= $s['code_match'] ? ' · código coincide' : '' ?>
+<?php if (!$row['saved_mapping'] && !$row['blocked'] && $s['same_category'] && $s['name_match']): ?>
+<form method="post" action="<?= $e($u) ?>/admin/tic/moodle/vincular" style="display:inline-block;margin-left:1rem" onsubmit="return confirm('¿Confirmar vinculación con el curso Moodle #<?= (int)$s['id'] ?>? No modificará Moodle.');">
+<input type="hidden" name="_csrf" value="<?= $e(\App\Core\Csrf::token()) ?>">
+<input type="hidden" name="periodo" value="<?= (int)$preview['period']['id'] ?>">
+<input type="hidden" name="oferta_id" value="<?= (int)$row['subject']['oferta_id'] ?>">
+<input type="hidden" name="asignatura_id" value="<?= (int)$row['subject']['asignatura_id'] ?>">
+<input type="hidden" name="moodle_course_id" value="<?= (int)$s['id'] ?>">
+<button class="btn small secondary" type="submit">Confirmar vínculo</button></form>
+<?php endif; ?></li><?php endforeach; ?></ul></details><?php endif; ?>
 </div>
 <?php endforeach; ?>
 <p><strong>Modo seguro:</strong> <?= $e($preview['notice']) ?></p>

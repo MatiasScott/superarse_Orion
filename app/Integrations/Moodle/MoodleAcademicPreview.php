@@ -161,8 +161,9 @@ final class MoodleAcademicPreview
                 count($local) === 1 ? 'coincidencia_en_nivel' : (
                 count($local) > 1 ? 'ambiguo_en_nivel' : (count($suggestions) ? 'coincidencia_fuera_de_nivel' : 'no_identificado')
             ));
+            $saved = $this->savedMapping((int)$subject['oferta_id'], (int)$subject['asignatura_id']);
             $rows[] = [
-                'subject'=>$subject, 'display_name'=>$displayName, 'segments'=>$segments,'key'=>$key,'blocked'=>$blocked,
+                'saved_mapping'=>$saved, 'subject'=>$subject, 'display_name'=>$displayName, 'segments'=>$segments,'key'=>$key,'blocked'=>$blocked,
                 'course_id'=>count($exact) === 1 ? (int)$exact[0]['id'] : null,
                 'suggestions'=>array_slice($suggestions,0,15), 'suggestion_total'=>count($suggestions),
                 'course_status'=>$courseStatus, 'category_id'=>$parentId,
@@ -171,6 +172,13 @@ final class MoodleAcademicPreview
         return ['period'=>$period,'root_id'=>$rootId,'period_category_id'=>$periodCategory['id'] ?? null,
             'category_count'=>count($categories),'course_count'=>count($courses),
             'rows'=>$rows,'warnings'=>$warnings,'notice'=>'Solo lectura. Las sugerencias no constituyen vinculaciones y no se modifica Moodle ni Orion.'];
+    }
+
+    private function savedMapping(int $offerId, int $subjectId): ?array
+    {
+        $stmt = $this->db->prepare('SELECT moodle_course_id, fullname_moodle, moodle_category_id FROM orion_moodle_vinculos_asignatura WHERE oferta_academica_id=? AND asignatura_id=?');
+        $stmt->execute([$offerId, $subjectId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
     private function children(array $byParent, int $parent, string $name, array $aliases = []): array
