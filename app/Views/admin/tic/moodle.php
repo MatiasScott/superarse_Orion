@@ -2,7 +2,7 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.21 · Notificaciones emergentes · Grupos Moodle (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.22 · Sincronización controlada de grupos y paralelos</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php
 $orionNotices = [];
 if (!$enabled) $orionNotices[] = ['type' => 'warning', 'text' => 'La integración Moodle está deshabilitada en .env.'];
@@ -140,7 +140,18 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 <?php elseif ($group['comparison_status'] === 'ambiguo'): ?>Ambiguo: varios grupos con el mismo nombre
 <?php elseif ($group['comparison_status'] === 'consulta_fallida'): ?>No disponible
 <?php else: ?>Curso pendiente<?php endif; ?></td>
-<td><?= $group['needs_review'] ? 'Revisar: '.$e($group['review_reason']) : 'Sin observaciones' ?></td></tr>
+<td><?= $group['needs_review'] ? 'Revisar: '.$e($group['review_reason']) : 'Sin observaciones' ?>
+<?php if ($syncEnabled && $row['saved_mapping'] && (int)$row['saved_mapping']['moodle_course_id'] === (int)$row['group_course_id'] && !$group['needs_review'] && in_array($group['comparison_status'], ['faltante','encontrado'], true)): ?>
+<form method="post" action="<?= $e($u) ?>/admin/tic/moodle/sincronizar-grupo" data-orion-template-confirm="¿Sincronizar el grupo <?= $e($group['group_name']) ?> en el curso Moodle #<?= (int)$row['group_course_id'] ?>? No se matricularán usuarios.">
+<input type="hidden" name="_csrf" value="<?= $e(\App\Core\Csrf::token()) ?>">
+<input type="hidden" name="periodo" value="<?= (int)$preview['period']['id'] ?>">
+<input type="hidden" name="moodle_course_id" value="<?= (int)$row['group_course_id'] ?>">
+<input type="hidden" name="seccion_id" value="<?= (int)$group['section_id'] ?>">
+<input type="hidden" name="confirmacion" value="SINCRONIZAR_GRUPO">
+<button class="btn small" type="submit"><?= $group['comparison_status'] === 'faltante' ? 'Crear y vincular grupo' : 'Vincular grupo existente' ?></button>
+</form>
+<?php endif; ?>
+</td></tr>
 <?php endforeach; ?>
 </tbody></table>
 <?php endif; ?>
@@ -148,7 +159,7 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 </div>
 </div>
 <?php endforeach; ?>
-<p class="muted">Esta versión no vincula ni crea grupos. La comparación se realiza exclusivamente mediante Moodle REST.</p>
+<p class="muted">Los grupos se sincronizan individualmente con confirmación. No se matriculan estudiantes ni docentes.</p>
 <p><strong>Modo seguro:</strong> <?= $e($preview['notice']) ?></p>
 <?php endif; ?></div>
 

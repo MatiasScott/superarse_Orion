@@ -52,6 +52,24 @@ final class MoodleRestClient
         return $this->call('core_group_get_course_groups', ['courseid' => $courseId]);
     }
 
+    /** Crea un grupo en un curso validado; la confirmación se controla en el servidor Orion. */
+    public function createGroup(int $courseId, string $name): array
+    {
+        if (!filter_var($_ENV['MOODLE_SYNC_ENABLED'] ?? false, FILTER_VALIDATE_BOOL)) {
+            throw new RuntimeException('Sincronización Moodle deshabilitada.');
+        }
+        if ($courseId < 1 || trim($name) === '' || mb_strlen($name) > 254) {
+            throw new RuntimeException('Datos de grupo inválidos.');
+        }
+        $result = $this->call('core_group_create_groups', ['groups' => [[
+            'courseid' => $courseId, 'name' => trim($name),
+        ]]]);
+        if (!isset($result[0]['id']) || (int)$result[0]['id'] < 1) {
+            throw new RuntimeException('Moodle no confirmó el ID del grupo.');
+        }
+        return $result[0];
+    }
+
     /** Escritura explícita: la sincronización debe estar habilitada por configuración. */
     public function createCategory(string $name, int $parentId, string $idnumber): array
     {

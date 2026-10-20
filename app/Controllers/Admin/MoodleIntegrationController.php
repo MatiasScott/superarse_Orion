@@ -189,6 +189,69 @@ final class MoodleIntegrationController
         Response::redirect('/admin/tic/moodle?periodo='.$periodId);
     }
 
+    /** Sincronización individual de grupos: revalida el plan en servidor antes de escribir. */
+    public function syncGroup(Request $request): never
+    {
+        AccessService::require('tic.cuentas.aprobar');
+        if (!Csrf::validate((string)$request->input('_csrf'))) Response::abort(419, 'CSRF inválido.');
+        if (!filter_var($_ENV['MOODLE_SYNC_ENABLED'] ?? false, FILTER_VALIDATE_BOOL)) Response::abort(403, 'Sincronización Moodle deshabilitada.');
+        $periodId = (int)$request->input('periodo');
+        $courseId = (int)$request->input('moodle_course_id');
+        $sectionId = (int)$request->input('seccion_id');
+        if ($periodId < 1 || $courseId < 1 || $sectionId < 1 || (string)$request->input('confirmacion') !== 'SINCRONIZAR_GRUPO') {
+            Response::abort(422, 'Confirmación de grupo inválida.');
+        }
+        try {
+            $db = (new Database(new Config($_ENV)))->connection();
+            $this->assertLinkedCourse($db, $periodId, $courseId);
+            $client = new MoodleRestClient($_ENV);
+            $preview = (new MoodleAcademicPreview($db, $client))->preview($periodId);
+            $selected = null;
+            foreach ($preview['rows'] as $row) {
+                if (!$row['saved_mapping'] || (int)$row['saved_mapping']['moodle_course_id'] !== $courseId) continue;
+                foreach ($row['group_plan'] as $group) {
+                    if ((int)$group['section_id'] === $sectionId) {
+                        if ($selected !== null) throw new \RuntimeException('Sección ambigua entre asignaturas.');
+                        $selected = $group;
+                    }
+                }
+            }
+            if (!$selected || $selected['needs_review'] || !in_array($selected['comparison_status'], ['faltante','encontrado'], true)) {
+                throw new \RuntimeException('La sección requiere revisión o el grupo no se pudo verificar.');
+            }
+            // Reconsulta en vivo para evitar crear duplicados si cambió Moodle desde la vista previa.
+            $name = (string)$selected['group_name'];
+            $normalized = static fn(string $s): string => mb_strtolower(trim(preg_replace('/\s+/u', ' ', $s)), 'UTF-8');
+            $matches = [];
+            foreach ($client->courseGroups($courseId) as $group) {
+                if ($normalized((string)($group['name'] ?? '')) === $normalized($name)) $matches[] = $group;
+            }
+            if (count($matches) > 1) throw new \RuntimeException('Hay varios grupos con ese nombre; requiere revisión manual.');
+            $created = false;
+            if (count($matches) === 1) {
+                $groupId = (int)$matches[0]['id'];
+            } else {
+                $groupId = (int)$client->createGroup($courseId, $name)['id'];
+                $created = true;
+            }
+            // Guardar el vínculo por ID, sin matricular personas ni modificar el grupo remoto.
+            $stmt = $db->prepare('SELECT moodle_course_id,moodle_group_id FROM orion_moodle_vinculos_grupo WHERE seccion_id=?');
+            $stmt->execute([$sectionId]);
+            $prior = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if ($prior && ((int)$prior['moodle_course_id'] !== $courseId || (int)$prior['moodle_group_id'] !== $groupId)) {
+                throw new \RuntimeException('La sección ya está vinculada a otro grupo; no se reemplazó.');
+            }
+            if (!$prior) {
+                $stmt = $db->prepare('INSERT INTO orion_moodle_vinculos_grupo (seccion_id,moodle_course_id,moodle_group_id,nombre_grupo) VALUES (?,?,?,?)');
+                $stmt->execute([$sectionId,$courseId,$groupId,$name]);
+            }
+            Session::set('moodle_link_notice', 'Grupo '.($created ? 'creado y vinculado' : 'existente vinculado').': '.$name.' (Moodle #'.$groupId.', curso #'.$courseId.').');
+        } catch (Throwable $e) {
+            Session::set('moodle_link_notice', 'No se sincronizó el grupo: '.$e->getMessage().' Si Moodle creó el grupo, vuelve a consultar antes de reintentar.');
+        }
+        Response::redirect('/admin/tic/moodle?periodo='.$periodId);
+    }
+
     private function assertLinkedCourse(\PDO $db, int $periodId, int $courseId): void
     {
         $stmt = $db->prepare('SELECT 1 FROM orion_moodle_vinculos_asignatura WHERE periodo_academico_id=? AND moodle_course_id=? LIMIT 1');

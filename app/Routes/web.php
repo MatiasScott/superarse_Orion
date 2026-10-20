@@ -197,6 +197,7 @@ $router->post('/admin/tic/moodle/crear-curso', [\App\Controllers\Admin\MoodleInt
 $router->post('/admin/tic/moodle/aplicar-plantilla', [\App\Controllers\Admin\MoodleIntegrationController::class, 'applyTemplate']);
 $router->post('/admin/tic/moodle/completar-actividades', [\App\Controllers\Admin\MoodleIntegrationController::class, 'completeTemplate']);
 $router->post('/admin/tic/moodle/crear-actividad', [\App\Controllers\Admin\MoodleIntegrationController::class, 'addTemplateActivity']);
+$router->post('/admin/tic/moodle/sincronizar-grupo', [\App\Controllers\Admin\MoodleIntegrationController::class, 'syncGroup']);
 
 // Orion v0.11.10 — panel académico independiente de cupos
 $router->get('/admin/academico/cupos', [\App\Controllers\Admin\CapacityRequestController::class, 'academicIndex']);
