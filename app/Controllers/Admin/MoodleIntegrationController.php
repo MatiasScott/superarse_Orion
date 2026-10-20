@@ -315,7 +315,9 @@ final class MoodleIntegrationController
                                 $courseStatus=$remote['error']!==null ? 'No verificable' : ($moodleId===0 ? 'Pendiente' : (isset($remote['ids'][$moodleId]) ? 'Ya matriculado' : 'No matriculado'));
                                 $group['student_details'][]=['code'=>$student['code'],'student_id'=>$student['student_id'], 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus];
                             }
-                            $group['enrolled_read_error']=$enrolledCache[$courseId]['error'] ?? 'Curso no vinculado';
+                            $group['enrolled_read_error'] = isset($enrolledCache[$courseId])
+                                ? $enrolledCache[$courseId]['error']
+                                : 'Curso no vinculado';
                         }
                         unset($group);
                     }
