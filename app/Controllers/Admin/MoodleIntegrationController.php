@@ -339,6 +339,30 @@ final class MoodleIntegrationController
                                     }
                                 }
                             }
+                            // Consulta privilegiada y acotada del plugin institucional.
+                            // Los resultados se concilian con las búsquedas REST estándar.
+                            foreach (['username'=>$username, 'email'=>$email] as $field=>$value) {
+                                if ($value === '') continue;
+                                try {
+                                    $institutional = $client->institutionalIdentity($field, $value);
+                                    $exact = 0;
+                                    foreach ($institutional as $remoteUser) {
+                                        if (!is_array($remoteUser)) continue;
+                                        $id = (int)($remoteUser['id'] ?? 0);
+                                        if ($id < 1 || strcasecmp(trim((string)($remoteUser[$field] ?? '')), $value) !== 0) continue;
+                                        $exact++;
+                                        $matches[$id] = array_merge($matches[$id] ?? [], $remoteUser);
+                                    }
+                                    $diagnostics[] = 'Plugin institucional / ' . $field . ': ' . $exact . ' exacta(s)';
+                                } catch (Throwable $ex) {
+                                    $message = $ex->getMessage();
+                                    $code = 'Consulta no disponible';
+                                    if (preg_match('/^Moodle \(([a-zA-Z0-9_]+)\):/', $message, $parts)) {
+                                        $code = 'Moodle: ' . $parts[1];
+                                    }
+                                    $diagnostics[] = 'Plugin institucional / ' . $field . ': ' . $code;
+                                }
+                            }
                             $identityCache[$uid]['diagnostics'] = $diagnostics;
                             if (count($matches) === 1) {
                                 $match = reset($matches);

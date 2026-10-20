@@ -88,6 +88,21 @@ final class MoodleRestClient
         return $response['users'];
     }
 
+    /** Búsqueda exacta institucional mediante plugin Orion. Solo lectura. */
+    public function institutionalIdentity(string $field, string $value): array
+    {
+        if (!in_array($field, ['username', 'email'], true)) {
+            throw new RuntimeException('Campo de identidad no permitido.');
+        }
+        $response = $this->call('local_oriontemplate_find_identity', [
+            'field' => $field, 'value' => trim($value),
+        ]);
+        if (!isset($response['users']) || !is_array($response['users'])) {
+            throw new RuntimeException('Respuesta inesperada de consulta institucional.');
+        }
+        return $response['users'];
+    }
+
     /** Crea un grupo en un curso validado; la confirmación se controla en el servidor Orion. */
     public function createGroup(int $courseId, string $name): array
     {

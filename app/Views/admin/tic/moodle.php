@@ -2,7 +2,7 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.27 · Diagnóstico REST de identidades (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.28 · Conciliación institucional de identidades (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php
 $orionNotices = [];
 if (!$enabled) $orionNotices[] = ['type' => 'warning', 'text' => 'La integración Moodle está deshabilitada en .env.'];
@@ -165,7 +165,7 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 <?php endforeach; ?></tbody></table>
 <?php endif; ?>
 <h5 style="margin-top:1rem">Comparación individual de estudiantes · solo lectura</h5>
-<p class="muted">Se comparan dos funciones REST por username y correo exactos. Despliega el diagnóstico de cada estudiante para ver los resultados por método. Una respuesta vacía no demuestra que la cuenta no exista. Las coincidencias remotas son propuestas, no vinculaciones. No se crean cuentas ni matrículas.</p>
+<p class="muted">Se comparan dos funciones REST y la consulta institucional restringida por username y correo exactos. Despliega el diagnóstico de cada estudiante para ver los resultados por método. Una respuesta vacía no demuestra que la cuenta no exista. Las coincidencias remotas son propuestas, no vinculaciones. No se crean cuentas ni matrículas.</p>
 <?php foreach ($row['group_plan'] as $group): ?>
 <details style="margin-bottom:.7rem"><summary>Sección #<?= (int)$group['section_id'] ?> · <?= $e($group['parallel_code']) ?> — <?= count($group['student_details'] ?? []) ?> estudiantes elegibles</summary>
 <?php if (!empty($group['enrolled_read_error'])): ?><p class="alert warning"><?= $e($group['enrolled_read_error']) ?></p><?php endif; ?>
