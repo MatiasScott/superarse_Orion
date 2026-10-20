@@ -295,7 +295,7 @@ final class MoodleIntegrationController
                         foreach ($students as $student) {
                             $uid = (int)$student['user_id'];
                             if ($uid < 1 || isset($identityCache[$uid])) continue;
-                            $identityCache[$uid] = ['status'=>'Sin cuenta institucional', 'id'=>0, 'suspended'=>false];
+                            $identityCache[$uid] = ['status'=>'Sin cuenta institucional', 'id'=>0, 'suspended'=>false, 'verified'=>false];
                             $username = trim((string)$student['institutional_username']);
                             $email = trim((string)$student['institutional_email']);
                             if ($username === '' && $email === '') continue;
@@ -313,14 +313,26 @@ final class MoodleIntegrationController
                                 }
                                 if (count($matches) === 1) {
                                     $match = reset($matches);
-                                    $identityCache[$uid] = ['status'=>'Coincidencia exacta (sin vincular)', 'id'=>(int)$match['id'], 'suspended'=>!empty($match['suspended'])];
+                                    $remoteName = strtolower(trim((string)($match['username'] ?? '')));
+                                    $remoteEmail = strtolower(trim((string)($match['email'] ?? '')));
+                                    $expectedName = strtolower($username);
+                                    $expectedEmail = strtolower($email);
+                                    $nameConflict = $expectedName !== '' && $remoteName !== '' && $remoteName !== $expectedName;
+                                    $emailConflict = $expectedEmail !== '' && $remoteEmail !== '' && $remoteEmail !== $expectedEmail;
+                                    $adminAccount = $remoteName === 'admin';
+                                    $review = $adminAccount || $nameConflict || $emailConflict;
+                                    $identityCache[$uid] = [
+                                        'status'=>$adminAccount ? 'Cuenta administrativa existente: revisión manual obligatoria' : ($review ? 'Identificadores diferentes: revisión manual' : 'Coincidencia exacta: pendiente de aprobación'),
+                                        'id'=>(int)$match['id'], 'suspended'=>!empty($match['suspended']),
+                                        'verified'=>!$review, 'remote_username'=>(string)($match['username'] ?? ''),
+                                    ];
                                 } elseif (count($matches) > 1) {
                                     $identityCache[$uid]['status'] = 'Coincidencias conflictivas: revisión manual';
                                 } else {
-                                    $identityCache[$uid]['status'] = 'Cuenta no encontrada en Moodle';
+                                    $identityCache[$uid]['status'] = 'Sin coincidencias visibles por API; no confirma inexistencia';
                                 }
                             } catch (Throwable $ex) {
-                                $identityCache[$uid]['status'] = 'Consulta no disponible: habilitar core_user_get_users_by_field';
+                                $identityCache[$uid]['status'] = 'Consulta remota fallida: revisar servicio o permisos (no crear cuenta)';
                             }
                         }
                     }
@@ -349,11 +361,11 @@ final class MoodleIntegrationController
                                 $identity=$identityCache[(int)$student['user_id']] ?? ['status'=>'Sin usuario Orion', 'id'=>0, 'suspended'=>false];
                                 $candidateId=(int)$identity['id'];
                                 if ($moodleId===0 && $candidateId>0) {
-                                    $status=$identity['suspended'] ? 'Cuenta Moodle suspendida (sin vincular)' : 'Coincidencia exacta (sin vincular)';
+                                    $status=$identity['suspended'] ? 'Cuenta Moodle suspendida (sin vincular)' : (!empty($identity['verified']) ? 'Coincidencia exacta (sin vincular)' : 'Revisión manual obligatoria');
                                 }
                                 $remote=$enrolledCache[$courseId] ?? ['ids'=>[],'error'=>'Curso no vinculado'];
                                 $courseStatus=$remote['error']!==null ? 'No verificable' : ($moodleId===0 ? 'Pendiente' : (isset($remote['ids'][$moodleId]) ? 'Ya matriculado' : 'No matriculado'));
-                                $group['student_details'][]=['code'=>$student['code'],'student_id'=>$student['student_id'], 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus,'candidate_id'=>$candidateId,'identity_status'=>$identity['status'],'identity_username'=>$student['institutional_username'],'identity_email'=>$student['institutional_email']];
+                                $group['student_details'][]=['code'=>$student['code'],'student_id'=>$student['student_id'], 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus,'candidate_id'=>$candidateId,'identity_status'=>$identity['status'],'identity_username'=>$student['institutional_username'],'identity_email'=>$student['institutional_email'],'remote_username'=>$identity['remote_username'] ?? ''];
                             }
                             $group['enrolled_read_error'] = isset($enrolledCache[$courseId])
                                 ? $enrolledCache[$courseId]['error']
