@@ -56,7 +56,7 @@ final class MoodleEnrollmentPreview
         if (!$ids) return [];
         $marks = implode(',', array_fill(0, count($ids), '?'));
         $sql = "SELECT ma.seccion_id, e.id AS estudiante_id, e.codigo_estudiante,
-                       u.id AS usuario_id, um.moodle_user_id, um.username_moodle,
+                       u.id AS usuario_id, ci.username AS institutional_username, ci.email_institucional, um.moodle_user_id, um.username_moodle,
                        um.activo AS mapeo_activo, um.suspendido
                   FROM matricula_asignaturas ma
                   JOIN matriculas m ON m.id=ma.matricula_id
@@ -66,6 +66,7 @@ final class MoodleEnrollmentPreview
                   JOIN estudiantes e ON e.id=ec.estudiante_id
                   JOIN secciones s ON s.id=ma.seccion_id
                   LEFT JOIN usuarios u ON u.persona_id=e.persona_id AND u.activo=1 AND u.deleted_at IS NULL
+                  LEFT JOIN cuentas_institucionales ci ON ci.id=(SELECT ci2.id FROM cuentas_institucionales ci2 WHERE ci2.usuario_id=u.id AND ci2.activo=1 AND ci2.deleted_at IS NULL ORDER BY ci2.id DESC LIMIT 1)
                   LEFT JOIN usuario_moodle_mapeos um ON um.usuario_id=u.id AND um.activo=1
                  WHERE ma.seccion_id IN ($marks) AND ma.activo=1 AND m.activo=1
                    AND s.activo=1 AND s.deleted_at IS NULL AND e.activo=1 AND e.deleted_at IS NULL
@@ -82,7 +83,7 @@ final class MoodleEnrollmentPreview
             if (!isset($result[$section][$student])) {
                 $result[$section][$student]=[
                     'student_id'=>$student,'code'=>(string)$row['codigo_estudiante'],
-                    'user_id'=>(int)($row['usuario_id'] ?? 0),'mappings'=>[]
+                    'user_id'=>(int)($row['usuario_id'] ?? 0),'institutional_username'=>(string)($row['institutional_username'] ?? ''),'institutional_email'=>(string)($row['email_institucional'] ?? ''),'mappings'=>[]
                 ];
             }
             if ((int)($row['moodle_user_id'] ?? 0)>0) {

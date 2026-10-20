@@ -289,6 +289,41 @@ final class MoodleIntegrationController
                         $q->execute(array_values(array_unique($sectionIds)));
                         foreach ($q->fetchAll(\PDO::FETCH_ASSOC) as $link) $links[(int)$link['seccion_id']]=$link;
                     }
+                    // Consultas remotas exactas, limitadas a estudiantes elegibles y sin escrituras.
+                    $identityCache = [];
+                    foreach ($studentRows as $students) {
+                        foreach ($students as $student) {
+                            $uid = (int)$student['user_id'];
+                            if ($uid < 1 || isset($identityCache[$uid])) continue;
+                            $identityCache[$uid] = ['status'=>'Sin cuenta institucional', 'id'=>0, 'suspended'=>false];
+                            $username = trim((string)$student['institutional_username']);
+                            $email = trim((string)$student['institutional_email']);
+                            if ($username === '' && $email === '') continue;
+                            try {
+                                $matches = [];
+                                foreach (['username'=>$username, 'email'=>$email] as $field=>$value) {
+                                    if ($value === '') continue;
+                                    foreach ($client->usersByField($field, [$value]) as $remoteUser) {
+                                        $id = (int)($remoteUser['id'] ?? 0);
+                                        if ($id < 1) continue;
+                                        // Verificar la coincidencia exacta: nunca aceptar similitudes.
+                                        if (strcasecmp(trim((string)($remoteUser[$field] ?? '')), $value) !== 0) continue;
+                                        $matches[$id] = $remoteUser;
+                                    }
+                                }
+                                if (count($matches) === 1) {
+                                    $match = reset($matches);
+                                    $identityCache[$uid] = ['status'=>'Coincidencia exacta (sin vincular)', 'id'=>(int)$match['id'], 'suspended'=>!empty($match['suspended'])];
+                                } elseif (count($matches) > 1) {
+                                    $identityCache[$uid]['status'] = 'Coincidencias conflictivas: revisión manual';
+                                } else {
+                                    $identityCache[$uid]['status'] = 'Cuenta no encontrada en Moodle';
+                                }
+                            } catch (Throwable $ex) {
+                                $identityCache[$uid]['status'] = 'Consulta no disponible: habilitar core_user_get_users_by_field';
+                            }
+                        }
+                    }
                     $enrolledCache=[];
                     foreach ($preview['rows'] as &$row) {
                         $courseId=(int)($row['group_course_id'] ?? 0);
@@ -311,9 +346,14 @@ final class MoodleIntegrationController
                                 $maps=$student['mappings'];
                                 $status=count($maps)===0 ? 'Sin mapeo Moodle' : (count($maps)>1 ? 'Mapeo ambiguo' : (!empty($maps[0]['suspended']) ? 'Cuenta suspendida' : 'Mapeo local disponible'));
                                 $moodleId=count($maps)===1 ? $maps[0]['id'] : 0;
+                                $identity=$identityCache[(int)$student['user_id']] ?? ['status'=>'Sin usuario Orion', 'id'=>0, 'suspended'=>false];
+                                $candidateId=(int)$identity['id'];
+                                if ($moodleId===0 && $candidateId>0) {
+                                    $status=$identity['suspended'] ? 'Cuenta Moodle suspendida (sin vincular)' : 'Coincidencia exacta (sin vincular)';
+                                }
                                 $remote=$enrolledCache[$courseId] ?? ['ids'=>[],'error'=>'Curso no vinculado'];
                                 $courseStatus=$remote['error']!==null ? 'No verificable' : ($moodleId===0 ? 'Pendiente' : (isset($remote['ids'][$moodleId]) ? 'Ya matriculado' : 'No matriculado'));
-                                $group['student_details'][]=['code'=>$student['code'],'student_id'=>$student['student_id'], 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus];
+                                $group['student_details'][]=['code'=>$student['code'],'student_id'=>$student['student_id'], 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus,'candidate_id'=>$candidateId,'identity_status'=>$identity['status'],'identity_username'=>$student['institutional_username'],'identity_email'=>$student['institutional_email']];
                             }
                             $group['enrolled_read_error'] = isset($enrolledCache[$courseId])
                                 ? $enrolledCache[$courseId]['error']

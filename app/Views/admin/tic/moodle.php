@@ -2,7 +2,7 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.24 · Conciliación de estudiantes y grupos (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.25 · Identificación de cuentas institucionales (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php
 $orionNotices = [];
 if (!$enabled) $orionNotices[] = ['type' => 'warning', 'text' => 'La integración Moodle está deshabilitada en .env.'];
@@ -165,15 +165,15 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 <?php endforeach; ?></tbody></table>
 <?php endif; ?>
 <h5 style="margin-top:1rem">Comparación individual de estudiantes · solo lectura</h5>
-<p class="muted">Los mapeos se obtienen por ID de usuario Orion. La consulta de participantes requiere core_enrol_get_enrolled_users en el servicio Moodle. No se matriculan usuarios ni se modifican grupos.</p>
+<p class="muted">La búsqueda utiliza username y correo institucional exactos. Las coincidencias remotas son propuestas, no vinculaciones. No se crean cuentas ni matrículas.</p>
 <?php foreach ($row['group_plan'] as $group): ?>
 <details style="margin-bottom:.7rem"><summary>Sección #<?= (int)$group['section_id'] ?> · <?= $e($group['parallel_code']) ?> — <?= count($group['student_details'] ?? []) ?> estudiantes elegibles</summary>
 <?php if (!empty($group['enrolled_read_error'])): ?><p class="alert warning"><?= $e($group['enrolled_read_error']) ?></p><?php endif; ?>
-<table><thead><tr><th>Código estudiante</th><th>ID Moodle</th><th>Mapeo Orion</th><th>Matrícula en curso</th></tr></thead><tbody>
+<table><thead><tr><th>Código estudiante</th><th>ID Moodle</th><th>Mapeo Orion</th><th>Cuenta institucional</th><th>Candidato Moodle</th><th>Resultado de búsqueda</th><th>Matrícula en curso</th></tr></thead><tbody>
 <?php foreach ($group['student_details'] ?? [] as $student): ?>
-<tr><td><?= $e($student['code']) ?></td><td><?= $student['moodle_id'] > 0 ? '#'.(int)$student['moodle_id'] : 'Sin identificar' ?></td><td><?= $e($student['mapping_status']) ?></td><td><?= $e($student['course_status']) ?></td></tr>
+<tr><td><?= $e($student['code']) ?></td><td><?= $student['moodle_id'] > 0 ? '#'.(int)$student['moodle_id'] : 'Sin identificar' ?></td><td><?= $e($student['mapping_status']) ?></td><td><?= $e($student['identity_email'] ?: $student['identity_username']) ?></td><td><?= !empty($student['candidate_id']) ? '#'.(int)$student['candidate_id'] : '—' ?></td><td><?= $e($student['identity_status']) ?></td><td><?= $e($student['course_status']) ?></td></tr>
 <?php endforeach; ?>
-<?php if (empty($group['student_details'])): ?><tr><td colspan="4">No hay estudiantes académicamente elegibles.</td></tr><?php endif; ?>
+<?php if (empty($group['student_details'])): ?><tr><td colspan="7">No hay estudiantes académicamente elegibles.</td></tr><?php endif; ?>
 </tbody></table></details>
 <?php endforeach; ?>
 <p><strong>Curso destino:</strong> <?= $row['saved_mapping'] ? '#'.(int)$row['saved_mapping']['moodle_course_id'].' (vinculado)' : 'Pendiente de vinculación o creación' ?>.</p>

@@ -59,6 +59,18 @@ final class MoodleRestClient
         return $this->call('core_enrol_get_enrolled_users', ['courseid'=>$courseId]);
     }
 
+    /** Consulta exacta de cuentas Moodle. No crea ni actualiza usuarios. */
+    public function usersByField(string $field, array $values): array
+    {
+        if (!in_array($field, ['username', 'email'], true)) {
+            throw new RuntimeException('Campo de búsqueda Moodle no permitido.');
+        }
+        $values = array_values(array_unique(array_filter(array_map('trim', $values), static fn(string $v): bool => $v !== '')));
+        if (!$values) return [];
+        if (count($values) > 100) throw new RuntimeException('Demasiados usuarios en una consulta.');
+        return $this->call('core_user_get_users_by_field', ['field' => $field, 'values' => $values]);
+    }
+
     /** Crea un grupo en un curso validado; la confirmación se controla en el servidor Orion. */
     public function createGroup(int $courseId, string $name): array
     {
