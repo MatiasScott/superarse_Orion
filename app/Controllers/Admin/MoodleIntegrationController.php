@@ -19,6 +19,93 @@ use Throwable;
 
 final class MoodleIntegrationController
 {
+    /** Vincula solo un identificador existente. No ejecuta escrituras en Moodle. */
+    public function linkIdentity(Request $request): never
+    {
+        AccessService::require('tic.cuentas.aprobar');
+        if (!Csrf::validate((string)$request->input('_csrf'))) Response::abort(419, 'CSRF inválido.');
+        $periodId = (int)$request->input('periodo');
+        $sectionId = (int)$request->input('seccion_id');
+        $studentId = (int)$request->input('estudiante_id');
+        $candidateId = (int)$request->input('moodle_user_id');
+        $confirmation = (string)$request->input('confirmacion');
+        if ($periodId < 1 || $sectionId < 1 || $studentId < 1 || $candidateId < 1 || $confirmation !== 'VINCULAR_IDENTIDAD') {
+            Response::abort(422, 'Datos o confirmación inválidos.');
+        }
+        try {
+            $db = (new Database(new Config($_ENV)))->connection();
+            $client = new MoodleRestClient($_ENV);
+            // Revalidar matrícula académica elegible, curso vinculado y candidato remoto.
+            $academic = (new MoodleAcademicPreview($db, $client))->preview($periodId);
+            $sectionAllowed = false;
+            foreach ($academic['rows'] as $row) {
+                if (empty($row['saved_mapping'])) continue;
+                foreach ($row['group_plan'] as $group) {
+                    if ((int)$group['section_id'] === $sectionId &&
+                        (int)$row['saved_mapping']['moodle_course_id'] === (int)($row['group_course_id'] ?? 0)) {
+                        $sectionAllowed = true;
+                    }
+                }
+            }
+            if (!$sectionAllowed) Response::abort(409, 'Sección sin curso Moodle vinculado y verificado.');
+            $students = (new MoodleEnrollmentPreview($db))->studentsForSections([$sectionId]);
+            $target = null;
+            foreach ($students[$sectionId] ?? [] as $student) {
+                if ((int)$student['student_id'] === $studentId) { $target = $student; break; }
+            }
+            if (!$target || (int)$target['user_id'] < 1 || $target['mappings']) {
+                Response::abort(409, 'El estudiante ya no es elegible, no tiene usuario o tiene un mapeo existente.');
+            }
+            $email = trim((string)($target['institutional_email'] ?? ''));
+            if ($email === '' || !str_ends_with(strtolower($email), '@superarse.edu.ec')) {
+                Response::abort(409, 'Se requiere correo institucional válido para confirmar la identidad.');
+            }
+            $matches = $client->institutionalIdentity('email', $email);
+            $exact = [];
+            foreach ($matches as $remote) {
+                if (strcasecmp(trim((string)($remote['email'] ?? '')), $email) === 0 && (int)($remote['id'] ?? 0) > 0) {
+                    $exact[(int)$remote['id']] = $remote;
+                }
+            }
+            if (count($exact) !== 1 || !isset($exact[$candidateId])) {
+                Response::abort(409, 'Identidad remota cambiada, ausente o ambigua. Actualice la vista previa.');
+            }
+            $remote = $exact[$candidateId];
+            if (!empty($remote['suspended'])) Response::abort(409, 'Cuenta Moodle suspendida.');
+            $remoteUsername = trim((string)($remote['username'] ?? ''));
+            if ($remoteUsername === '') Response::abort(409, 'Moodle no devolvió el username.');
+            $admin = strcasecmp($remoteUsername, 'admin') === 0;
+            if ($admin && (string)$request->input('confirmacion_admin') !== 'CONFIRMAR_ADMIN') {
+                Response::abort(422, 'La cuenta administrativa requiere confirmación adicional.');
+            }
+            $actor = (array)Session::get('auth_user', []);
+            $actorId = (int)($actor['id'] ?? 0);
+            if ($actorId < 1) Response::abort(403, 'Sesión de usuario inválida.');
+            $db->beginTransaction();
+            try {
+                $instance = $db->query("SELECT id FROM instancias_moodle WHERE codigo='MOODLE_SUPERARSE' AND activo=1 LIMIT 1 FOR UPDATE")->fetch(\PDO::FETCH_ASSOC);
+                $state = $db->query("SELECT id FROM estados_mapeo_moodle WHERE codigo='SINCRONIZADO' AND activo=1 LIMIT 1")->fetch(\PDO::FETCH_ASSOC);
+                if (!$instance || !$state) throw new \RuntimeException('Instancia o estado de mapeo Moodle no configurado.');
+                $instanceId = (int)$instance['id'];
+                $check = $db->prepare('SELECT usuario_id,moodle_user_id FROM usuario_moodle_mapeos WHERE instancia_moodle_id=? AND (usuario_id=? OR moodle_user_id=?) FOR UPDATE');
+                $check->execute([$instanceId, (int)$target['user_id'], $candidateId]);
+                if ($check->fetch()) throw new \RuntimeException('Ya existe una vinculación para el usuario Orion o la cuenta Moodle.');
+                $insert = $db->prepare('INSERT INTO usuario_moodle_mapeos (instancia_moodle_id,usuario_id,estado_mapeo_moodle_id,moodle_user_id,username_moodle,email_moodle,ultima_sincronizacion_at,suspendido,activo) VALUES (?,?,?,?,?,?,NOW(),0,1)');
+                $insert->execute([$instanceId,(int)$target['user_id'],(int)$state['id'],$candidateId,$remoteUsername,$email]);
+                $audit = $db->prepare('INSERT INTO historial_integracion_moodle (instancia_moodle_id,entidad,entidad_local_id,entidad_moodle_id,accion,ejecutado_por_usuario_id,detalle,datos_json) VALUES (?,?,?,?,?,?,?,?)');
+                $audit->execute([$instanceId,'USUARIO',(int)$target['user_id'],$candidateId,'VINCULAR_IDENTIDAD_EXISTENTE',$actorId,'Vinculación local aprobada por TIC; Moodle no fue modificado.',json_encode(['estudiante_id'=>$studentId,'seccion_id'=>$sectionId,'email'=>$email,'username_moodle'=>$remoteUsername,'cuenta_admin'=>$admin],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)]);
+                $db->commit();
+            } catch (Throwable $e) {
+                if ($db->inTransaction()) $db->rollBack();
+                throw $e;
+            }
+            Session::set('moodle_link_notice', 'Identidad vinculada localmente: estudiante #'.$studentId.' con Moodle #'.$candidateId.'. Sin cambios en Moodle.');
+        } catch (Throwable $e) {
+            Session::set('moodle_link_notice', 'No se vinculó la identidad: '.$e->getMessage());
+        }
+        Response::redirect('/admin/tic/moodle?periodo='.$periodId);
+    }
+
     public function link(Request $request): never
     {
         AccessService::require('tic.cuentas.ver');
@@ -416,7 +503,7 @@ final class MoodleIntegrationController
                                 }
                                 $remote=$enrolledCache[$courseId] ?? ['ids'=>[],'error'=>'Curso no vinculado'];
                                 $courseStatus=$remote['error']!==null ? 'No verificable' : ($moodleId===0 ? 'Pendiente' : (isset($remote['ids'][$moodleId]) ? 'Ya matriculado' : 'No matriculado'));
-                                $group['student_details'][]=['code'=>$student['code'],'student_id'=>$student['student_id'], 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus,'candidate_id'=>$candidateId,'identity_status'=>$identity['status'],'identity_username'=>$student['institutional_username'],'identity_email'=>$student['institutional_email'],'remote_username'=>$identity['remote_username'] ?? '','identity_diagnostics'=>$identity['diagnostics'] ?? []];
+                                $group['student_details'][]=['code'=>$student['code'],'student_id'=>$student['student_id'], 'user_id'=>$student['user_id'], 'candidate_suspended'=>!empty($identity['suspended']), 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus,'candidate_id'=>$candidateId,'identity_status'=>$identity['status'],'identity_username'=>$student['institutional_username'],'identity_email'=>$student['institutional_email'],'remote_username'=>$identity['remote_username'] ?? '','identity_diagnostics'=>$identity['diagnostics'] ?? []];
                             }
                             $group['enrolled_read_error'] = isset($enrolledCache[$courseId])
                                 ? $enrolledCache[$courseId]['error']

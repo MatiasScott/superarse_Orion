@@ -2,7 +2,7 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.28 · Conciliación institucional de identidades (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.29 · Vinculación local controlada de identidades</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php
 $orionNotices = [];
 if (!$enabled) $orionNotices[] = ['type' => 'warning', 'text' => 'La integración Moodle está deshabilitada en .env.'];
@@ -164,16 +164,29 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 <?php if (!empty($ep['reasons'])): ?><details><summary>Ver motivos</summary><ul><?php foreach ($ep['reasons'] as $reason=>$count): ?><li><?= $e($reason) ?>: <?= (int)$count ?></li><?php endforeach; ?></ul></details><?php endif; ?></td><td>Solo vista previa; pendiente verificar usuarios Moodle</td></tr>
 <?php endforeach; ?></tbody></table>
 <?php endif; ?>
-<h5 style="margin-top:1rem">Comparación individual de estudiantes · solo lectura</h5>
-<p class="muted">Se comparan dos funciones REST y la consulta institucional restringida por username y correo exactos. Despliega el diagnóstico de cada estudiante para ver los resultados por método. Una respuesta vacía no demuestra que la cuenta no exista. Las coincidencias remotas son propuestas, no vinculaciones. No se crean cuentas ni matrículas.</p>
+<h5 style="margin-top:1rem">Comparación individual y vinculación controlada de estudiantes</h5>
+<p class="muted">Se comparan dos funciones REST y la consulta institucional restringida por username y correo exactos. Despliega el diagnóstico de cada estudiante para ver los resultados por método. Una respuesta vacía no demuestra que la cuenta no exista. Las coincidencias remotas son propuestas. La vinculación requiere confirmación y solo escribe en Orion; no crea cuentas ni matrículas.</p>
 <?php foreach ($row['group_plan'] as $group): ?>
 <details style="margin-bottom:.7rem"><summary>Sección #<?= (int)$group['section_id'] ?> · <?= $e($group['parallel_code']) ?> — <?= count($group['student_details'] ?? []) ?> estudiantes elegibles</summary>
 <?php if (!empty($group['enrolled_read_error'])): ?><p class="alert warning"><?= $e($group['enrolled_read_error']) ?></p><?php endif; ?>
-<table><thead><tr><th>Código estudiante</th><th>ID Moodle</th><th>Mapeo Orion</th><th>Cuenta institucional</th><th>Candidato Moodle</th><th>Username remoto</th><th>Resultado de búsqueda</th><th>Matrícula en curso</th></tr></thead><tbody>
+<table><thead><tr><th>Código estudiante</th><th>ID Moodle</th><th>Mapeo Orion</th><th>Cuenta institucional</th><th>Candidato Moodle</th><th>Username remoto</th><th>Resultado de búsqueda</th><th>Matrícula en curso</th><th>Acción TIC</th></tr></thead><tbody>
 <?php foreach ($group['student_details'] ?? [] as $student): ?>
-<tr><td><?= $e($student['code']) ?></td><td><?= $student['moodle_id'] > 0 ? '#'.(int)$student['moodle_id'] : 'Sin identificar' ?></td><td><?= $e($student['mapping_status']) ?></td><td><?= $e($student['identity_email'] ?: $student['identity_username']) ?></td><td><?= !empty($student['candidate_id']) ? '#'.(int)$student['candidate_id'] : '—' ?></td><td><?= $e($student['remote_username'] ?? '—') ?></td><td><?= $e($student['identity_status']) ?><?php if (!empty($student['identity_diagnostics'])): ?><details><summary>Diagnóstico REST</summary><ul><?php foreach ($student['identity_diagnostics'] as $line): ?><li><?= $e($line) ?></li><?php endforeach; ?></ul></details><?php endif; ?></td><td><?= $e($student['course_status']) ?></td></tr>
+<tr><td><?= $e($student['code']) ?></td><td><?= $student['moodle_id'] > 0 ? '#'.(int)$student['moodle_id'] : 'Sin identificar' ?></td><td><?= $e($student['mapping_status']) ?></td><td><?= $e($student['identity_email'] ?: $student['identity_username']) ?></td><td><?= !empty($student['candidate_id']) ? '#'.(int)$student['candidate_id'] : '—' ?></td><td><?= $e($student['remote_username'] ?? '—') ?></td><td><?= $e($student['identity_status']) ?><?php if (!empty($student['identity_diagnostics'])): ?><details><summary>Diagnóstico REST</summary><ul><?php foreach ($student['identity_diagnostics'] as $line): ?><li><?= $e($line) ?></li><?php endforeach; ?></ul></details><?php endif; ?></td><td><?= $e($student['course_status']) ?></td><td>
+<?php if ((int)$student['moodle_id'] === 0 && (int)$student['candidate_id'] > 0 && (int)$student['user_id'] > 0 && empty($student['candidate_suspended']) && $row['saved_mapping']): ?>
+<form method="post" action="<?= $e($u) ?>/admin/tic/moodle/vincular-identidad" data-identity-link="1" data-code="<?= $e($student['code']) ?>" data-email="<?= $e($student['identity_email']) ?>" data-remote="<?= $e($student['remote_username']) ?>" data-moodle-id="<?= (int)$student['candidate_id'] ?>" data-admin="<?= strtolower((string)$student['remote_username']) === 'admin' ? '1' : '0' ?>">
+<input type="hidden" name="_csrf" value="<?= $e(\App\Core\Csrf::token()) ?>">
+<input type="hidden" name="periodo" value="<?= (int)$preview['period']['id'] ?>">
+<input type="hidden" name="seccion_id" value="<?= (int)$group['section_id'] ?>">
+<input type="hidden" name="estudiante_id" value="<?= (int)$student['student_id'] ?>">
+<input type="hidden" name="moodle_user_id" value="<?= (int)$student['candidate_id'] ?>">
+<input type="hidden" name="confirmacion" value="VINCULAR_IDENTIDAD">
+<input type="hidden" name="confirmacion_admin" value="">
+<button type="submit" class="btn small secondary">Revisar vínculo</button>
+</form>
+<?php else: ?>—<?php endif; ?>
+</td></tr>
 <?php endforeach; ?>
-<?php if (empty($group['student_details'])): ?><tr><td colspan="8">No hay estudiantes académicamente elegibles.</td></tr><?php endif; ?>
+<?php if (empty($group['student_details'])): ?><tr><td colspan="9">No hay estudiantes académicamente elegibles.</td></tr><?php endif; ?>
 </tbody></table></details>
 <?php endforeach; ?>
 <p><strong>Curso destino:</strong> <?= $row['saved_mapping'] ? '#'.(int)$row['saved_mapping']['moodle_course_id'].' (vinculado)' : 'Pendiente de vinculación o creación' ?>.</p>
@@ -410,5 +423,41 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});})();
     }
   });
   show();
+})();
+</script>
+
+<div class="orion-modal" id="orionIdentityModal" aria-hidden="true">
+  <div class="orion-modal-backdrop" data-identity-close></div>
+  <div class="orion-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="orionIdentityTitle">
+    <button type="button" class="orion-modal-x" data-identity-close aria-label="Cerrar">×</button>
+    <span class="eyebrow">TIC · Identidad Moodle</span>
+    <h2 id="orionIdentityTitle">Confirmar vinculación local</h2>
+    <p id="orionIdentityDescription"></p>
+    <p class="muted">Solo se guarda el mapeo en Orion y su auditoría. No se cambian nombres de usuario, contraseñas, permisos ni matrículas Moodle.</p>
+    <p id="orionIdentityAdminWarning" style="display:none"><strong>Atención: cuenta administrativa.</strong> Verifica personalmente que esta identidad corresponde al estudiante antes de continuar.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" data-identity-close>Cancelar</button>
+      <button type="button" class="btn" id="orionIdentityAccept">Confirmar vínculo</button>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  const modal=document.getElementById('orionIdentityModal');
+  const accept=document.getElementById('orionIdentityAccept');
+  const desc=document.getElementById('orionIdentityDescription');
+  const warning=document.getElementById('orionIdentityAdminWarning');
+  if (!modal || !accept || !desc || !warning) return;
+  let form=null, opener=null;
+  function close(){ modal.classList.remove('is-open');modal.setAttribute('aria-hidden','true');document.body.classList.remove('modal-open');form=null;if(opener)opener.focus(); }
+  document.querySelectorAll('[data-identity-link]').forEach(f=>f.addEventListener('submit',ev=>{
+    ev.preventDefault();form=f;opener=ev.submitter || f.querySelector('button');
+    desc.textContent='Estudiante '+f.dataset.code+' ('+f.dataset.email+') → cuenta Moodle #'+f.dataset.moodleId+' ('+f.dataset.remote+').';
+    warning.style.display=f.dataset.admin==='1'?'block':'none';
+    modal.classList.add('is-open');modal.setAttribute('aria-hidden','false');document.body.classList.add('modal-open');accept.focus();
+  }));
+  modal.querySelectorAll('[data-identity-close]').forEach(x=>x.addEventListener('click',close));
+  document.addEventListener('keydown',e=>{if(e.key==='Escape' && modal.classList.contains('is-open'))close();});
+  accept.addEventListener('click',()=>{if(!form)return;const f=form;f.elements.confirmacion_admin.value=f.dataset.admin==='1'?'CONFIRMAR_ADMIN':'';form=null;accept.disabled=true;f.submit();});
 })();
 </script>
