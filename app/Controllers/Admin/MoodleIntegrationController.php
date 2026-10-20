@@ -14,6 +14,7 @@ use App\Integrations\Moodle\MoodleAcademicPreview;
 use App\Integrations\Moodle\MoodleCategorySync;
 use App\Integrations\Moodle\MoodleCourseSync;
 use App\Integrations\Moodle\MoodleEnrollmentPreview;
+use App\Integrations\Moodle\MoodleProvisioningPreflight;
 use App\Services\AccessService;
 use Throwable;
 
@@ -382,7 +383,7 @@ final class MoodleIntegrationController
                         foreach ($students as $student) {
                             $uid = (int)$student['user_id'];
                             if ($uid < 1 || isset($identityCache[$uid])) continue;
-                            $identityCache[$uid] = ['status'=>'Sin cuenta institucional', 'id'=>0, 'suspended'=>false, 'verified'=>false];
+                            $identityCache[$uid] = ['status'=>'Sin cuenta institucional', 'id'=>0, 'suspended'=>false, 'verified'=>false, 'lookup_complete'=>true];
                             $username = trim((string)$student['institutional_username']);
                             $email = trim((string)$student['institutional_email']);
                             if ($username === '' && $email === '') continue;
@@ -423,6 +424,7 @@ final class MoodleIntegrationController
                                         }
                                         $diagnostics[] = ($method === 'by_field' ? 'Por campo' : 'Por criterios')
                                             . ' / ' . $field . ': ' . $code;
+                                        $identityCache[$uid]['lookup_complete'] = false;
                                     }
                                 }
                             }
@@ -448,6 +450,7 @@ final class MoodleIntegrationController
                                         $code = 'Moodle: ' . $parts[1];
                                     }
                                     $diagnostics[] = 'Plugin institucional / ' . $field . ': ' . $code;
+                                    $identityCache[$uid]['lookup_complete'] = false;
                                 }
                             }
                             $identityCache[$uid]['diagnostics'] = $diagnostics;
@@ -465,7 +468,7 @@ final class MoodleIntegrationController
                                     'status'=>$adminAccount ? 'Cuenta administrativa existente: revisión manual obligatoria' : ($review ? 'Identificadores diferentes: revisión manual' : 'Coincidencia exacta: pendiente de aprobación'),
                                     'id'=>(int)$match['id'], 'suspended'=>!empty($match['suspended']),
                                     'verified'=>!$review, 'remote_username'=>(string)($match['username'] ?? ''),
-                                    'diagnostics'=>$diagnostics,
+                                    'diagnostics'=>$diagnostics, 'lookup_complete'=>$identityCache[$uid]['lookup_complete'],
                                 ];
                             } elseif (count($matches) > 1) {
                                 $identityCache[$uid]['status'] = 'Coincidencias conflictivas: revisión manual';
@@ -503,7 +506,8 @@ final class MoodleIntegrationController
                                 }
                                 $remote=$enrolledCache[$courseId] ?? ['ids'=>[],'error'=>'Curso no vinculado'];
                                 $courseStatus=$remote['error']!==null ? 'No verificable' : ($moodleId===0 ? 'Pendiente' : (isset($remote['ids'][$moodleId]) ? 'Ya matriculado' : 'No matriculado'));
-                                $group['student_details'][]=['code'=>$student['code'],'student_id'=>$student['student_id'], 'user_id'=>$student['user_id'], 'candidate_suspended'=>!empty($identity['suspended']), 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus,'candidate_id'=>$candidateId,'identity_status'=>$identity['status'],'identity_username'=>$student['institutional_username'],'identity_email'=>$student['institutional_email'],'remote_username'=>$identity['remote_username'] ?? '','identity_diagnostics'=>$identity['diagnostics'] ?? []];
+                                $preflight=(new MoodleProvisioningPreflight($db))->inspect($student, $identity);
+                                $group['student_details'][]=['provisioning_preflight'=>$preflight,'code'=>$student['code'],'student_id'=>$student['student_id'], 'user_id'=>$student['user_id'], 'candidate_suspended'=>!empty($identity['suspended']), 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus,'candidate_id'=>$candidateId,'identity_status'=>$identity['status'],'identity_username'=>$student['institutional_username'],'identity_email'=>$student['institutional_email'],'remote_username'=>$identity['remote_username'] ?? '','identity_diagnostics'=>$identity['diagnostics'] ?? []];
                             }
                             $group['enrolled_read_error'] = isset($enrolledCache[$courseId])
                                 ? $enrolledCache[$courseId]['error']

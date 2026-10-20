@@ -2,7 +2,7 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.29 · Vinculación local controlada de identidades</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.30 · Prevalidación segura de aprovisionamiento (sin creación)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php
 $orionNotices = [];
 if (!$enabled) $orionNotices[] = ['type' => 'warning', 'text' => 'La integración Moodle está deshabilitada en .env.'];
@@ -165,7 +165,7 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 <?php endforeach; ?></tbody></table>
 <?php endif; ?>
 <h5 style="margin-top:1rem">Comparación individual y vinculación controlada de estudiantes</h5>
-<p class="muted">Se comparan dos funciones REST y la consulta institucional restringida por username y correo exactos. Despliega el diagnóstico de cada estudiante para ver los resultados por método. Una respuesta vacía no demuestra que la cuenta no exista. Las coincidencias remotas son propuestas. La vinculación requiere confirmación y solo escribe en Orion; no crea cuentas ni matrículas.</p>
+<p class="muted">Se comparan dos funciones REST y la consulta institucional restringida por username y correo exactos. Despliega el diagnóstico de cada estudiante para ver los resultados por método. Una respuesta vacía no demuestra que la cuenta no exista. Las coincidencias remotas son propuestas. La vinculación requiere confirmación y solo escribe en Orion. La prevalidación de cuentas nuevas es de solo lectura; no crea cuentas ni matrículas.</p>
 <?php foreach ($row['group_plan'] as $group): ?>
 <details style="margin-bottom:.7rem"><summary>Sección #<?= (int)$group['section_id'] ?> · <?= $e($group['parallel_code']) ?> — <?= count($group['student_details'] ?? []) ?> estudiantes elegibles</summary>
 <?php if (!empty($group['enrolled_read_error'])): ?><p class="alert warning"><?= $e($group['enrolled_read_error']) ?></p><?php endif; ?>
@@ -183,6 +183,14 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 <input type="hidden" name="confirmacion_admin" value="">
 <button type="submit" class="btn small secondary">Revisar vínculo</button>
 </form>
+<?php elseif ((int)$student['moodle_id'] === 0 && (int)$student['candidate_id'] === 0): ?>
+<?php $pf=$student['provisioning_preflight'] ?? ['status'=>'No evaluado','reasons'=>[],'proposed_username'=>'']; ?>
+<details><summary>Prevalidar cuenta</summary>
+<p><strong><?= $e($pf['status']) ?></strong></p>
+<p>Username institucional propuesto: <code><?= $e($pf['proposed_username'] ?: 'No disponible') ?></code></p>
+<?php if (!empty($pf['reasons'])): ?><ul><?php foreach ($pf['reasons'] as $reason): ?><li><?= $e($reason) ?></li><?php endforeach; ?></ul><?php endif; ?>
+<p class="muted">No se crea ningún usuario. Falta definir el método de autenticación, la habilitación REST y la política de credenciales.</p>
+</details>
 <?php else: ?>—<?php endif; ?>
 </td></tr>
 <?php endforeach; ?>
