@@ -62,7 +62,10 @@ final class MoodleRestClient
             throw new RuntimeException('Datos de grupo inválidos.');
         }
         $result = $this->call('core_group_create_groups', ['groups' => [[
-            'courseid' => $courseId, 'name' => trim($name),
+            'courseid' => $courseId,
+            'name' => trim($name),
+            'description' => '',
+            'descriptionformat' => 1,
         ]]]);
         if (!isset($result[0]['id']) || (int)$result[0]['id'] < 1) {
             throw new RuntimeException('Moodle no confirmó el ID del grupo.');
