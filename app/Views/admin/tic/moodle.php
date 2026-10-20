@@ -56,13 +56,22 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 <?php if ($row['saved_mapping'] && $syncEnabled): ?>
 <div class="card" style="margin:1rem 0;padding:1rem;border:1px solid #cbd5e1">
 <h5>Plantilla institucional Moodle · 13 secciones</h5>
-<p>Aplica la plantilla solo en cursos nuevos y vacíos. La comprobación final se hace en Moodle; no se modifica contenido docente existente.</p>
+<p>El botón de secciones se utiliza solo en cursos nuevos y vacíos. La comprobación final se hace en Moodle; no se modifica contenido docente existente.</p>
 <form method="post" action="<?= $e($u) ?>/admin/tic/moodle/aplicar-plantilla" data-orion-template-confirm="Aplicar plantilla institucional al curso Moodle #<?= (int)$row['saved_mapping']['moodle_course_id'] ?>?">
 <input type="hidden" name="_csrf" value="<?= $e(\App\Core\Csrf::token()) ?>">
 <input type="hidden" name="periodo" value="<?= (int)$preview['period']['id'] ?>">
 <input type="hidden" name="moodle_course_id" value="<?= (int)$row['saved_mapping']['moodle_course_id'] ?>">
 <input type="hidden" name="confirmacion" value="APLICAR_PLANTILLA">
 <button class="btn small" type="submit">Aplicar 13 secciones</button></form>
+<h5 style="margin-top:1rem">Actividades institucionales automáticas</h5>
+<p>Agrega las 22 actividades base (foros, tareas y cuestionarios) a las secciones ya creadas. No modifica las actividades existentes; los docentes completan fechas, contenidos y preguntas. Los módulos nuevos se crean ocultos.</p>
+<form method="post" action="<?= $e($u) ?>/admin/tic/moodle/completar-actividades" data-orion-template-confirm="Completar las actividades institucionales faltantes en el curso Moodle #<?= (int)$row['saved_mapping']['moodle_course_id'] ?>?">
+<input type="hidden" name="_csrf" value="<?= $e(\App\Core\Csrf::token()) ?>">
+<input type="hidden" name="periodo" value="<?= (int)$preview['period']['id'] ?>">
+<input type="hidden" name="moodle_course_id" value="<?= (int)$row['saved_mapping']['moodle_course_id'] ?>">
+<input type="hidden" name="confirmacion" value="COMPLETAR_ACTIVIDADES">
+<button class="btn small" type="submit">Completar actividades automáticamente</button>
+</form>
 <h5 style="margin-top:1rem">Agregar recurso o actividad</h5>
 <p class="muted">Primero aplica la plantilla. Las actividades se crean ocultas, sin fechas ni preguntas. No se crean archivos ficticios.</p>
 <form method="post" action="<?= $e($u) ?>/admin/tic/moodle/crear-actividad" data-orion-template-confirm="Crear este recurso o actividad en Moodle?">

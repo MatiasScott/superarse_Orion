@@ -108,7 +108,14 @@ final class MoodleIntegrationController
             $user = (array)Session::get('auth_user', []);
             $actor = isset($user['id']) ? (int)$user['id'] : null;
             $id = (new MoodleCourseSync($db, $client))->create($preview, $periodId, $offerId, $subjectId, $actor);
-            Session::set('moodle_link_notice', 'Curso Moodle #'.$id.' creado oculto y vinculado en Orion.');
+            // La creación del curso ya se confirmó: un fallo de plantilla no revierte el vínculo.
+            try {
+                $client->templateSections($id);
+                $summary = \App\Integrations\Moodle\MoodleInstitutionalTemplate::applyActivities($client, $id);
+                Session::set('moodle_link_notice', 'Curso Moodle #'.$id.' creado y vinculado; 13 secciones y '.$summary['created'].' actividades base creadas. '.count($summary['errors']).' incidencias.');
+            } catch (Throwable $templateError) {
+                Session::set('moodle_link_notice', 'Curso Moodle #'.$id.' creado y vinculado, pero la plantilla quedó pendiente: '.$templateError->getMessage());
+            }
         } catch (Throwable $e) {
             Session::set('moodle_link_notice', 'No se completó la creación: '.$e->getMessage());
         }
@@ -130,6 +137,28 @@ final class MoodleIntegrationController
             Session::set('moodle_link_notice', 'Plantilla aplicada al curso #'.$courseId.'. '.(int)($result['created'] ?? 0).' secciones creadas.');
         } catch (Throwable $e) {
             Session::set('moodle_link_notice', 'Plantilla no aplicada: '.$e->getMessage());
+        }
+        Response::redirect('/admin/tic/moodle?periodo='.$periodId);
+    }
+
+    /** Completa actividades institucionales en cursos ya vinculados y con 13 secciones. */
+    public function completeTemplate(Request $request): never
+    {
+        AccessService::require('tic.cuentas.aprobar');
+        if (!Csrf::validate((string)$request->input('_csrf'))) Response::abort(419, 'CSRF inválido.');
+        $periodId = (int)$request->input('periodo');
+        $courseId = (int)$request->input('moodle_course_id');
+        if ($periodId < 1 || $courseId < 1 || (string)$request->input('confirmacion') !== 'COMPLETAR_ACTIVIDADES') Response::abort(422, 'Confirmación inválida.');
+        try {
+            $db = (new Database(new Config($_ENV)))->connection();
+            $this->assertLinkedCourse($db, $periodId, $courseId);
+            $client = new MoodleRestClient($_ENV);
+            $summary = \App\Integrations\Moodle\MoodleInstitutionalTemplate::applyActivities($client, $courseId);
+            $message = 'Curso #'.$courseId.': '.$summary['created'].' actividades creadas; '.$summary['existing'].' ya existentes; '.count($summary['errors']).' errores.';
+            if ($summary['errors']) $message .= ' Detalle: '.implode(' | ', array_slice($summary['errors'], 0, 4));
+            Session::set('moodle_link_notice', $message);
+        } catch (Throwable $e) {
+            Session::set('moodle_link_notice', 'No se completaron las actividades: '.$e->getMessage());
         }
         Response::redirect('/admin/tic/moodle?periodo='.$periodId);
     }
