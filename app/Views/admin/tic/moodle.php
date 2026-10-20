@@ -2,7 +2,7 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.22 · Sincronización controlada de grupos y paralelos</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.23 · Vista previa de matrículas académicas aprobadas (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php
 $orionNotices = [];
 if (!$enabled) $orionNotices[] = ['type' => 'warning', 'text' => 'La integración Moodle está deshabilitada en .env.'];
@@ -154,6 +154,15 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 </td></tr>
 <?php endforeach; ?>
 </tbody></table>
+<?php endif; ?>
+<h5 style="margin-top:1rem">Vista previa de matrículas académicas · solo lectura</h5>
+<p class="muted">Se consideran elegibles únicamente matrículas generales CONFIRMADA o EN_CURSO, con asignatura MATRICULADA o EN_CURSO. No se crean cuentas, no se matricula a nadie ni se agregan miembros a grupos Moodle. La correspondencia de usuarios y la comparación con participantes Moodle se implementarán antes de habilitar cualquier sincronización.</p>
+<?php if ($row['group_plan']): ?>
+<table><thead><tr><th>Sección</th><th>Paralelo</th><th>Elegibles en Orion</th><th>Excluidos</th><th>Estado de sincronización</th></tr></thead><tbody>
+<?php foreach ($row['group_plan'] as $group): $ep = $group['enrollment_preview'] ?? ['eligible'=>0,'excluded'=>0,'reasons'=>[]]; ?>
+<tr><td>#<?= (int)$group['section_id'] ?></td><td><?= $e($group['parallel_code']) ?></td><td><?= (int)$ep['eligible'] ?></td><td><?= (int)$ep['excluded'] ?>
+<?php if (!empty($ep['reasons'])): ?><details><summary>Ver motivos</summary><ul><?php foreach ($ep['reasons'] as $reason=>$count): ?><li><?= $e($reason) ?>: <?= (int)$count ?></li><?php endforeach; ?></ul></details><?php endif; ?></td><td>Solo vista previa; pendiente verificar usuarios Moodle</td></tr>
+<?php endforeach; ?></tbody></table>
 <?php endif; ?>
 <p><strong>Curso destino:</strong> <?= $row['saved_mapping'] ? '#'.(int)$row['saved_mapping']['moodle_course_id'].' (vinculado)' : 'Pendiente de vinculación o creación' ?>.</p>
 </div>

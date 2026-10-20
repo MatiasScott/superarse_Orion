@@ -13,6 +13,7 @@ use App\Integrations\Moodle\MoodleRestClient;
 use App\Integrations\Moodle\MoodleAcademicPreview;
 use App\Integrations\Moodle\MoodleCategorySync;
 use App\Integrations\Moodle\MoodleCourseSync;
+use App\Integrations\Moodle\MoodleEnrollmentPreview;
 use App\Services\AccessService;
 use Throwable;
 
@@ -274,6 +275,20 @@ final class MoodleIntegrationController
                 $periodId = filter_input(INPUT_GET, 'periodo', FILTER_VALIDATE_INT);
                 if ($periodId && $periodId > 0) {
                     $preview = $academic->preview($periodId);
+                    // Conciliación local de matrículas aprobadas, sin escrituras REST.
+                    $sectionIds = [];
+                    foreach ($preview['rows'] as $row) {
+                        foreach ($row['group_plan'] as $group) $sectionIds[] = (int)$group['section_id'];
+                    }
+                    $enrollmentCounts = (new MoodleEnrollmentPreview($db))->forSections($sectionIds);
+                    foreach ($preview['rows'] as &$row) {
+                        foreach ($row['group_plan'] as &$group) {
+                            $group['enrollment_preview'] = $enrollmentCounts[(int)$group['section_id']]
+                                ?? ['eligible'=>0, 'excluded'=>0, 'total'=>0, 'reasons'=>[]];
+                        }
+                        unset($group);
+                    }
+                    unset($row);
                 }
             } catch (Throwable $e) {
                 $error = $e->getMessage();
