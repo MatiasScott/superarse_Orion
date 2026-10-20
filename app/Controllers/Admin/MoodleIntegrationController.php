@@ -299,40 +299,67 @@ final class MoodleIntegrationController
                             $username = trim((string)$student['institutional_username']);
                             $email = trim((string)$student['institutional_email']);
                             if ($username === '' && $email === '') continue;
-                            try {
-                                $matches = [];
-                                foreach (['username'=>$username, 'email'=>$email] as $field=>$value) {
-                                    if ($value === '') continue;
-                                    foreach ($client->usersByField($field, [$value]) as $remoteUser) {
-                                        $id = (int)($remoteUser['id'] ?? 0);
-                                        if ($id < 1) continue;
-                                        // Verificar la coincidencia exacta: nunca aceptar similitudes.
-                                        if (strcasecmp(trim((string)($remoteUser[$field] ?? '')), $value) !== 0) continue;
-                                        $matches[$id] = $remoteUser;
+                            $matches = [];
+                            $diagnostics = [];
+                            foreach (['username'=>$username, 'email'=>$email] as $field=>$value) {
+                                if ($value === '') continue;
+                                foreach (['by_field', 'criteria'] as $method) {
+                                    try {
+                                        $remoteUsers = $method === 'by_field'
+                                            ? $client->usersByField($field, [$value])
+                                            : $client->searchUsers($field, $value);
+                                        $exact = 0;
+                                        foreach ($remoteUsers as $remoteUser) {
+                                            if (!is_array($remoteUser)) continue;
+                                            $id = (int)($remoteUser['id'] ?? 0);
+                                            if ($id < 1) continue;
+                                            if (strcasecmp(trim((string)($remoteUser[$field] ?? '')), $value) !== 0) continue;
+                                            $exact++;
+                                            if (isset($matches[$id])) {
+                                                $matches[$id] = array_merge($matches[$id], array_filter($remoteUser, static fn($v) => $v !== null && $v !== ''));
+                                            } else {
+                                                $matches[$id] = $remoteUser;
+                                            }
+                                        }
+                                        $diagnostics[] = ($method === 'by_field' ? 'Por campo' : 'Por criterios')
+                                            . ' / ' . $field . ': ' . $exact . ' exacta(s), ' . count($remoteUsers) . ' devuelta(s)';
+                                    } catch (Throwable $ex) {
+                                        // Evitar mostrar respuestas HTTP completas o datos de configuración.
+                                        $message = $ex->getMessage();
+                                        $code = 'Error de consulta';
+                                        if (preg_match('/^Moodle \(([a-zA-Z0-9_]+)\):/', $message, $parts)) {
+                                            $code = 'Moodle: ' . $parts[1];
+                                        } elseif (preg_match('/HTTP ([0-9]{3})/', $message, $parts)) {
+                                            $code = 'HTTP ' . $parts[1];
+                                        } elseif (str_contains($message, 'Respuesta inesperada')) {
+                                            $code = 'Formato de respuesta inesperado';
+                                        }
+                                        $diagnostics[] = ($method === 'by_field' ? 'Por campo' : 'Por criterios')
+                                            . ' / ' . $field . ': ' . $code;
                                     }
                                 }
-                                if (count($matches) === 1) {
-                                    $match = reset($matches);
-                                    $remoteName = strtolower(trim((string)($match['username'] ?? '')));
-                                    $remoteEmail = strtolower(trim((string)($match['email'] ?? '')));
-                                    $expectedName = strtolower($username);
-                                    $expectedEmail = strtolower($email);
-                                    $nameConflict = $expectedName !== '' && $remoteName !== '' && $remoteName !== $expectedName;
-                                    $emailConflict = $expectedEmail !== '' && $remoteEmail !== '' && $remoteEmail !== $expectedEmail;
-                                    $adminAccount = $remoteName === 'admin';
-                                    $review = $adminAccount || $nameConflict || $emailConflict;
-                                    $identityCache[$uid] = [
-                                        'status'=>$adminAccount ? 'Cuenta administrativa existente: revisión manual obligatoria' : ($review ? 'Identificadores diferentes: revisión manual' : 'Coincidencia exacta: pendiente de aprobación'),
-                                        'id'=>(int)$match['id'], 'suspended'=>!empty($match['suspended']),
-                                        'verified'=>!$review, 'remote_username'=>(string)($match['username'] ?? ''),
-                                    ];
-                                } elseif (count($matches) > 1) {
-                                    $identityCache[$uid]['status'] = 'Coincidencias conflictivas: revisión manual';
-                                } else {
-                                    $identityCache[$uid]['status'] = 'Sin coincidencias visibles por API; no confirma inexistencia';
-                                }
-                            } catch (Throwable $ex) {
-                                $identityCache[$uid]['status'] = 'Consulta remota fallida: revisar servicio o permisos (no crear cuenta)';
+                            }
+                            $identityCache[$uid]['diagnostics'] = $diagnostics;
+                            if (count($matches) === 1) {
+                                $match = reset($matches);
+                                $remoteName = strtolower(trim((string)($match['username'] ?? '')));
+                                $remoteEmail = strtolower(trim((string)($match['email'] ?? '')));
+                                $expectedName = strtolower($username);
+                                $expectedEmail = strtolower($email);
+                                $nameConflict = $expectedName !== '' && $remoteName !== '' && $remoteName !== $expectedName;
+                                $emailConflict = $expectedEmail !== '' && $remoteEmail !== '' && $remoteEmail !== $expectedEmail;
+                                $adminAccount = $remoteName === 'admin';
+                                $review = $adminAccount || $nameConflict || $emailConflict;
+                                $identityCache[$uid] = [
+                                    'status'=>$adminAccount ? 'Cuenta administrativa existente: revisión manual obligatoria' : ($review ? 'Identificadores diferentes: revisión manual' : 'Coincidencia exacta: pendiente de aprobación'),
+                                    'id'=>(int)$match['id'], 'suspended'=>!empty($match['suspended']),
+                                    'verified'=>!$review, 'remote_username'=>(string)($match['username'] ?? ''),
+                                    'diagnostics'=>$diagnostics,
+                                ];
+                            } elseif (count($matches) > 1) {
+                                $identityCache[$uid]['status'] = 'Coincidencias conflictivas: revisión manual';
+                            } else {
+                                $identityCache[$uid]['status'] = 'Sin coincidencias exactas visibles; no confirma inexistencia';
                             }
                         }
                     }
@@ -365,7 +392,7 @@ final class MoodleIntegrationController
                                 }
                                 $remote=$enrolledCache[$courseId] ?? ['ids'=>[],'error'=>'Curso no vinculado'];
                                 $courseStatus=$remote['error']!==null ? 'No verificable' : ($moodleId===0 ? 'Pendiente' : (isset($remote['ids'][$moodleId]) ? 'Ya matriculado' : 'No matriculado'));
-                                $group['student_details'][]=['code'=>$student['code'],'student_id'=>$student['student_id'], 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus,'candidate_id'=>$candidateId,'identity_status'=>$identity['status'],'identity_username'=>$student['institutional_username'],'identity_email'=>$student['institutional_email'],'remote_username'=>$identity['remote_username'] ?? ''];
+                                $group['student_details'][]=['code'=>$student['code'],'student_id'=>$student['student_id'], 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus,'candidate_id'=>$candidateId,'identity_status'=>$identity['status'],'identity_username'=>$student['institutional_username'],'identity_email'=>$student['institutional_email'],'remote_username'=>$identity['remote_username'] ?? '','identity_diagnostics'=>$identity['diagnostics'] ?? []];
                             }
                             $group['enrolled_read_error'] = isset($enrolledCache[$courseId])
                                 ? $enrolledCache[$courseId]['error']

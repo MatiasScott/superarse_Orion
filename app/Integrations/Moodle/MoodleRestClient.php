@@ -71,6 +71,23 @@ final class MoodleRestClient
         return $this->call('core_user_get_users_by_field', ['field' => $field, 'values' => $values]);
     }
 
+    /** Búsqueda por criterio mediante API oficial. Solo lectura; filtrar coincidencia exacta en Orion. */
+    public function searchUsers(string $field, string $value): array
+    {
+        if (!in_array($field, ['username', 'email'], true)) {
+            throw new RuntimeException('Criterio Moodle no permitido.');
+        }
+        $value = trim($value);
+        if ($value === '' || strlen($value) > 254) return [];
+        $response = $this->call('core_user_get_users', [
+            'criteria' => [['key' => $field, 'value' => $value]],
+        ]);
+        if (!isset($response['users']) || !is_array($response['users'])) {
+            throw new RuntimeException('Respuesta inesperada de core_user_get_users.');
+        }
+        return $response['users'];
+    }
+
     /** Crea un grupo en un curso validado; la confirmación se controla en el servidor Orion. */
     public function createGroup(int $courseId, string $name): array
     {
