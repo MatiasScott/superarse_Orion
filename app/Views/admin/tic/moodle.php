@@ -53,6 +53,32 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 </tbody></table>
 <?php foreach ($row['blocked'] as $b): ?><p><strong>Requiere revisión:</strong> <?= $e($b) ?></p><?php endforeach; ?>
 <p><strong>Estado de conciliación:</strong> <?= $e(str_replace('_', ' ', $row['course_status'])) ?> · <strong>Categoría de nivel:</strong> <?= $row['category_id'] === null ? 'Pendiente' : '#'.(int)$row['category_id'] ?></p>
+<?php if ($row['saved_mapping'] && $syncEnabled): ?>
+<div class="card" style="margin:1rem 0;padding:1rem;border:1px solid #cbd5e1">
+<h5>Plantilla institucional Moodle · 13 secciones</h5>
+<p>Aplica la plantilla solo en cursos nuevos y vacíos. La comprobación final se hace en Moodle; no se modifica contenido docente existente.</p>
+<form method="post" action="<?= $e($u) ?>/admin/tic/moodle/aplicar-plantilla" data-orion-template-confirm="Aplicar plantilla institucional al curso Moodle #<?= (int)$row['saved_mapping']['moodle_course_id'] ?>?">
+<input type="hidden" name="_csrf" value="<?= $e(\App\Core\Csrf::token()) ?>">
+<input type="hidden" name="periodo" value="<?= (int)$preview['period']['id'] ?>">
+<input type="hidden" name="moodle_course_id" value="<?= (int)$row['saved_mapping']['moodle_course_id'] ?>">
+<input type="hidden" name="confirmacion" value="APLICAR_PLANTILLA">
+<button class="btn small" type="submit">Aplicar 13 secciones</button></form>
+<h5 style="margin-top:1rem">Agregar recurso o actividad</h5>
+<p class="muted">Primero aplica la plantilla. Las actividades se crean ocultas, sin fechas ni preguntas. No se crean archivos ficticios.</p>
+<form method="post" action="<?= $e($u) ?>/admin/tic/moodle/crear-actividad" data-orion-template-confirm="Crear este recurso o actividad en Moodle?">
+<input type="hidden" name="_csrf" value="<?= $e(\App\Core\Csrf::token()) ?>">
+<input type="hidden" name="periodo" value="<?= (int)$preview['period']['id'] ?>">
+<input type="hidden" name="moodle_course_id" value="<?= (int)$row['saved_mapping']['moodle_course_id'] ?>">
+<input type="hidden" name="confirmacion" value="CREAR_ACTIVIDAD">
+<label>Sección</label><select name="sectionnum" required>
+<?php foreach (['PARCIAL I','DOCUMENTOS IMPORTANTES','CLASES SINCRÓNICAS','UNIDAD I','UNIDAD 2','SEMANA DE RECUPERACIÓN: PARCIAL I','EXAMEN PARCIAL I','PARCIAL II','UNIDAD III','UNIDAD IV','SEMANA DE RECUPERACIÓN: PARCIAL II','EXAMEN PARCIAL II','EXAMEN SUPLETORIO'] as $idx=>$label): ?>
+<option value="<?= $idx+1 ?>"><?= $idx+1 ?> · <?= $e($label) ?></option><?php endforeach; ?></select>
+<label>Tipo</label><select name="type" required><option value="forum">Foro</option><option value="assign">Tarea</option><option value="quiz">Cuestionario</option><option value="url">Enlace URL</option></select>
+<label>Nombre</label><input type="text" name="name" maxlength="255" minlength="3" required placeholder="Ej. EVALUACIÓN FORMATIVA 1.7: UNIDAD I">
+<label>Enlace (solo para tipo URL)</label><input type="url" name="url" placeholder="https://...">
+<button class="btn small secondary" type="submit">Crear actividad o recurso</button>
+</form></div>
+<?php endif; ?>
 <?php if ($row['saved_mapping']): ?><p><strong>Vinculado en Orion:</strong> curso Moodle #<?= (int)$row['saved_mapping']['moodle_course_id'] ?> · <?= $e($row['saved_mapping']['fullname_moodle']) ?></p><?php endif; ?>
 <p><strong>Curso con clave exacta:</strong> <?= $row['course_id'] !== null ? '#'.(int)$row['course_id'] : 'No identificado' ?></p>
 <?php if (!$row['saved_mapping'] && !$row['blocked'] && $row['category_id'] &&
@@ -233,4 +259,21 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('is-open')) close(); });
   accept.addEventListener('click', () => { if (!pending) return; const form = pending; pending = null; accept.disabled = true; form.submit(); });
 })();
+</script>
+
+<div class="orion-modal" id="orionTemplateModal" aria-hidden="true">
+<div class="orion-modal-backdrop" data-orion-template-close></div>
+<div class="orion-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="orionTemplateTitle">
+<button class="orion-modal-x" type="button" data-orion-template-close aria-label="Cerrar">×</button>
+<h2 id="orionTemplateTitle">Confirmar operación Moodle</h2><p id="orionTemplateMessage"></p>
+<p class="muted">La operación se realizará en el curso Moodle seleccionado.</p>
+<div class="modal-actions"><button class="btn secondary" type="button" data-orion-template-close>Cancelar</button><button class="btn" type="button" id="orionTemplateAccept">Confirmar</button></div>
+</div></div>
+<script>
+(()=>{const modal=document.getElementById('orionTemplateModal');const msg=document.getElementById('orionTemplateMessage');let form=null;
+const close=()=>{modal.classList.remove('show','is-open','active');modal.style.display='none';modal.setAttribute('aria-hidden','true');form=null;};
+document.querySelectorAll('[data-orion-template-confirm]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();form=f;msg.textContent=f.dataset.orionTemplateConfirm;modal.style.display='flex';modal.classList.add('show','is-open','active');modal.setAttribute('aria-hidden','false');}));
+modal.querySelectorAll('[data-orion-template-close]').forEach(b=>b.addEventListener('click',close));
+document.getElementById('orionTemplateAccept').addEventListener('click',()=>{if(!form)return;const target=form;close();target.submit();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});})();
 </script>

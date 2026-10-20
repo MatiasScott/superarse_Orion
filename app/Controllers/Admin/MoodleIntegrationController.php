@@ -115,6 +115,58 @@ final class MoodleIntegrationController
         Response::redirect('/admin/tic/moodle?periodo='.$periodId);
     }
 
+    /** Plantilla institucional: acción separada, nunca se ejecuta al crear/vincular un curso. */
+    public function applyTemplate(Request $request): never
+    {
+        AccessService::require('tic.cuentas.aprobar');
+        if (!Csrf::validate((string)$request->input('_csrf'))) Response::abort(419, 'CSRF inválido.');
+        $periodId = (int)$request->input('periodo');
+        $courseId = (int)$request->input('moodle_course_id');
+        if ($periodId < 1 || $courseId < 1 || (string)$request->input('confirmacion') !== 'APLICAR_PLANTILLA') Response::abort(422, 'Confirmación inválida.');
+        try {
+            $db = (new Database(new Config($_ENV)))->connection();
+            $this->assertLinkedCourse($db, $periodId, $courseId);
+            $result = (new MoodleRestClient($_ENV))->templateSections($courseId);
+            Session::set('moodle_link_notice', 'Plantilla aplicada al curso #'.$courseId.'. '.(int)($result['created'] ?? 0).' secciones creadas.');
+        } catch (Throwable $e) {
+            Session::set('moodle_link_notice', 'Plantilla no aplicada: '.$e->getMessage());
+        }
+        Response::redirect('/admin/tic/moodle?periodo='.$periodId);
+    }
+
+    public function addTemplateActivity(Request $request): never
+    {
+        AccessService::require('tic.cuentas.aprobar');
+        if (!Csrf::validate((string)$request->input('_csrf'))) Response::abort(419, 'CSRF inválido.');
+        $periodId = (int)$request->input('periodo');
+        $courseId = (int)$request->input('moodle_course_id');
+        $section = (int)$request->input('sectionnum');
+        $type = trim((string)$request->input('type'));
+        $name = trim((string)$request->input('name'));
+        $url = trim((string)$request->input('url'));
+        if ($periodId < 1 || $courseId < 1 || $section < 1 || $section > 13 ||
+            !in_array($type, ['forum','assign','quiz','url'], true) ||
+            mb_strlen($name) < 3 || mb_strlen($name) > 255 ||
+            (string)$request->input('confirmacion') !== 'CREAR_ACTIVIDAD') Response::abort(422, 'Datos de actividad inválidos.');
+        if ($type === 'url' && (!filter_var($url, FILTER_VALIDATE_URL) || !in_array(strtolower((string)parse_url($url, PHP_URL_SCHEME)), ['https','http'], true))) Response::abort(422, 'URL inválida.');
+        try {
+            $db = (new Database(new Config($_ENV)))->connection();
+            $this->assertLinkedCourse($db, $periodId, $courseId);
+            $result = (new MoodleRestClient($_ENV))->templateActivity($courseId, $section, $type, $name, $url);
+            Session::set('moodle_link_notice', 'Recurso/actividad creado en Moodle: '. $name.' (módulo #'.(int)($result['cmid'] ?? 0).').');
+        } catch (Throwable $e) {
+            Session::set('moodle_link_notice', 'No se creó la actividad: '.$e->getMessage());
+        }
+        Response::redirect('/admin/tic/moodle?periodo='.$periodId);
+    }
+
+    private function assertLinkedCourse(\PDO $db, int $periodId, int $courseId): void
+    {
+        $stmt = $db->prepare('SELECT 1 FROM orion_moodle_vinculos_asignatura WHERE periodo_academico_id=? AND moodle_course_id=? LIMIT 1');
+        $stmt->execute([$periodId, $courseId]);
+        if (!$stmt->fetchColumn()) throw new \RuntimeException('El curso no está vinculado a ese período en Orion.');
+    }
+
     public function index(Request $request): void
     {
         AccessService::require('tic.cuentas.ver');

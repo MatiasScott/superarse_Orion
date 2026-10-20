@@ -92,6 +92,24 @@ final class MoodleRestClient
         return $result[0];
     }
 
+    /** Servicio local/oriontemplate instalado en Moodle: nunca escribe sin habilitación explícita. */
+    public function templateSections(int $courseId): array
+    {
+        if (!filter_var($_ENV['MOODLE_SYNC_ENABLED'] ?? false, FILTER_VALIDATE_BOOL)) throw new RuntimeException('Sincronización Moodle deshabilitada.');
+        if ($courseId < 1) throw new RuntimeException('Curso inválido.');
+        return $this->call('local_oriontemplate_apply_sections', ['courseid' => $courseId]);
+    }
+
+    public function templateActivity(int $courseId, int $section, string $type, string $name, string $url = ''): array
+    {
+        if (!filter_var($_ENV['MOODLE_SYNC_ENABLED'] ?? false, FILTER_VALIDATE_BOOL)) throw new RuntimeException('Sincronización Moodle deshabilitada.');
+        if ($courseId < 1 || $section < 1 || trim($name) === '') throw new RuntimeException('Datos de actividad inválidos.');
+        return $this->call('local_oriontemplate_add_activity', [
+            'courseid' => $courseId, 'sectionnum' => $section,
+            'type' => $type, 'name' => $name, 'url' => $url,
+        ]);
+    }
+
     private function read(string $function): array
     {
         return $this->call($function, []);
