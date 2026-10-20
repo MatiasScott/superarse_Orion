@@ -2,10 +2,17 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.7 · Comparación de grupos Moodle (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
-<?php if (!$enabled): ?><div class="alert">La integración Moodle está deshabilitada en .env.</div><?php endif; ?>
-<?php if (!empty($linkNotice)): ?><div class="alert"><?= $e($linkNotice) ?></div><?php endif; ?>
-<?php if ($error !== null): ?><div class="alert error">Error: <?= $e($error) ?></div><?php endif; ?>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.21 · Notificaciones emergentes · Grupos Moodle (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<?php
+$orionNotices = [];
+if (!$enabled) $orionNotices[] = ['type' => 'warning', 'text' => 'La integración Moodle está deshabilitada en .env.'];
+if (!empty($linkNotice)) {
+    $noticeText = (string)$linkNotice;
+    $isError = preg_match('/(?:\berrores?\s*:\s*[1-9]\d*|[1-9]\d*\s+errores?|no se |no fue |interrumpid|incidencias?\s*:\s*[1-9]\d*|plantilla quedó pendiente)/iu', $noticeText);
+    $orionNotices[] = ['type' => $isError ? 'error' : 'success', 'text' => $noticeText];
+}
+if ($error !== null) $orionNotices[] = ['type' => 'error', 'text' => 'Error: '.(string)$error];
+?>
 <div class="card"><h2>Estado de conexión</h2>
 <?php if ($site !== null): ?><p><strong>Conectado correctamente.</strong></p><table><tbody>
 <tr><th>Sitio</th><td><?= $e($site['sitename'] ?? '-') ?></td></tr>
@@ -20,7 +27,7 @@ $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QU
 <?php if ($preview !== null): ?>
 <h3><?= $e($preview['period']['nombre']) ?></h3>
 <p><strong>Inventario Moodle:</strong> <?= (int)$preview['category_count'] ?> categorías · <?= (int)$preview['course_count'] ?> cursos. <strong>Raíz Superarse:</strong> <?= $preview['root_id'] === null ? 'No identificada' : '#'.(int)$preview['root_id'] ?>.</p>
-<?php foreach ($preview['warnings'] as $w): ?><div class="alert error"><?= $e($w) ?></div><?php endforeach; ?>
+<?php foreach ($preview['warnings'] as $w): $orionNotices[] = ['type' => 'warning', 'text' => (string)$w]; endforeach; ?>
 <?php if (!$preview['rows']): ?><p>El período no tiene asignaturas con secciones activas.</p><?php endif; ?>
 <?php
 $syncPlan = [];
@@ -285,4 +292,91 @@ document.querySelectorAll('[data-orion-template-confirm]').forEach(f=>f.addEvent
 modal.querySelectorAll('[data-orion-template-close]').forEach(b=>b.addEventListener('click',close));
 document.getElementById('orionTemplateAccept').addEventListener('click',()=>{if(!form)return;const target=form;close();target.submit();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});})();
+</script>
+
+<style>
+.orion-notice-dialog {max-width:480px;width:calc(100% - 32px);position:relative;}
+.orion-notice-icon {font-size:2rem;margin:0 0 .4rem;line-height:1;}
+.orion-notice-dialog[data-kind="success"] .orion-notice-icon {color:#16865a;}
+.orion-notice-dialog[data-kind="error"] .orion-notice-icon {color:#b42318;}
+.orion-notice-dialog[data-kind="warning"] .orion-notice-icon {color:#b76e00;}
+.orion-notice-message {white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;}
+.orion-notice-progress {height:4px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-top:1rem;}
+.orion-notice-progress > span {display:block;height:100%;background:#16865a;width:100%;transform-origin:left;}
+.orion-notice-progress.is-running > span {animation:orion-notice-countdown 5s linear forwards;}
+@keyframes orion-notice-countdown {to{transform:scaleX(0)}}
+</style>
+<div class="orion-modal" id="orionNoticeModal" aria-hidden="true">
+  <div class="orion-modal-backdrop" data-notice-close></div>
+  <div class="orion-modal-dialog orion-notice-dialog" role="alertdialog" aria-modal="true" aria-labelledby="orionNoticeTitle" aria-describedby="orionNoticeMessage" data-kind="success">
+    <button type="button" class="orion-modal-x" data-notice-close aria-label="Cerrar mensaje">×</button>
+    <div class="orion-notice-icon" id="orionNoticeIcon" aria-hidden="true">✓</div>
+    <h2 id="orionNoticeTitle">Operación completada</h2>
+    <p class="orion-notice-message" id="orionNoticeMessage"></p>
+    <div class="orion-notice-progress" id="orionNoticeProgress"><span></span></div>
+    <div class="modal-actions"><button type="button" class="btn" id="orionNoticeAccept">Aceptar</button></div>
+  </div>
+</div>
+<script>
+(() => {
+  'use strict';
+  const notices = <?= json_encode($orionNotices, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+  const modal = document.getElementById('orionNoticeModal');
+  if (!modal || !Array.isArray(notices) || notices.length === 0) return;
+  const dialog = modal.querySelector('.orion-notice-dialog');
+  const title = document.getElementById('orionNoticeTitle');
+  const message = document.getElementById('orionNoticeMessage');
+  const icon = document.getElementById('orionNoticeIcon');
+  const progress = document.getElementById('orionNoticeProgress');
+  const accept = document.getElementById('orionNoticeAccept');
+  let timer = null, index = 0, previousFocus = null;
+  const labels = {
+    success: ['Operación completada', '✓'],
+    error: ['Se requiere revisión', '!'],
+    warning: ['Atención', '!'],
+    info: ['Información', 'i']
+  };
+  function close() {
+    if (timer !== null) { clearTimeout(timer); timer = null; }
+    progress.classList.remove('is-running');
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+    if (previousFocus && previousFocus.isConnected) previousFocus.focus();
+    index += 1;
+    if (index < notices.length) show();
+  }
+  function show() {
+    const item = notices[index];
+    const kind = Object.prototype.hasOwnProperty.call(labels, item.type) ? item.type : 'info';
+    const autoClose = kind === 'success' || kind === 'info';
+    previousFocus = document.activeElement;
+    dialog.dataset.kind = kind;
+    title.textContent = labels[kind][0];
+    icon.textContent = labels[kind][1];
+    message.textContent = String(item.text || '');
+    progress.hidden = !autoClose;
+    progress.classList.remove('is-running');
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+    accept.focus();
+    if (autoClose) {
+      void progress.offsetWidth;
+      progress.classList.add('is-running');
+      timer = setTimeout(close, 5000);
+    }
+  }
+  accept.addEventListener('click', close);
+  modal.querySelectorAll('[data-notice-close]').forEach(button => button.addEventListener('click', close));
+  document.addEventListener('keydown', event => {
+    if (!modal.classList.contains('is-open')) return;
+    if (event.key === 'Escape') { event.preventDefault(); close(); }
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      accept.focus();
+    }
+  });
+  show();
+})();
 </script>
