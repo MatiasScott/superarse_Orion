@@ -2,7 +2,7 @@
 $u = rtrim((string)($_ENV['APP_URL'] ?? ''), '/');
 $e = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.23 · Vista previa de matrículas académicas aprobadas (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
+<div class="page-head"><div><span class="eyebrow">TIC · MOODLE</span><h1>Integración Moodle</h1><p>v0.11.24 · Conciliación de estudiantes y grupos (solo lectura)</p></div><a class="btn secondary" href="<?= $e($u) ?>/admin/tic">← TIC</a></div>
 <?php
 $orionNotices = [];
 if (!$enabled) $orionNotices[] = ['type' => 'warning', 'text' => 'La integración Moodle está deshabilitada en .env.'];
@@ -135,13 +135,13 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 <tr><td>#<?= (int)$group['section_id'] ?> · <?= $e($group['section_code']) ?></td>
 <td><?= $e($group['parallel_code'] !== '' ? $group['parallel_code'] : 'Sin asignar') ?></td>
 <td><?= $e($group['group_name']) ?></td>
-<td><?php if ($group['comparison_status'] === 'encontrado'): ?>Existe · grupo #<?= (int)$group['moodle_matches'][0]['id'] ?>
+<td><?php if (!empty($group['group_link_verified'])): ?>Vinculado · grupo #<?= (int)$group['saved_group_id'] ?><?php elseif ($group['comparison_status'] === 'encontrado'): ?>Existe · grupo #<?= (int)$group['moodle_matches'][0]['id'] ?>
 <?php elseif ($group['comparison_status'] === 'faltante'): ?>No existe en Moodle
 <?php elseif ($group['comparison_status'] === 'ambiguo'): ?>Ambiguo: varios grupos con el mismo nombre
 <?php elseif ($group['comparison_status'] === 'consulta_fallida'): ?>No disponible
 <?php else: ?>Curso pendiente<?php endif; ?></td>
 <td><?= $group['needs_review'] ? 'Revisar: '.$e($group['review_reason']) : 'Sin observaciones' ?>
-<?php if ($syncEnabled && $row['saved_mapping'] && (int)$row['saved_mapping']['moodle_course_id'] === (int)$row['group_course_id'] && !$group['needs_review'] && in_array($group['comparison_status'], ['faltante','encontrado'], true)): ?>
+<?php if (empty($group['group_link_verified']) && $syncEnabled && $row['saved_mapping'] && (int)$row['saved_mapping']['moodle_course_id'] === (int)$row['group_course_id'] && !$group['needs_review'] && in_array($group['comparison_status'], ['faltante','encontrado'], true)): ?>
 <form method="post" action="<?= $e($u) ?>/admin/tic/moodle/sincronizar-grupo" data-orion-template-confirm="¿Sincronizar el grupo <?= $e($group['group_name']) ?> en el curso Moodle #<?= (int)$row['group_course_id'] ?>? No se matricularán usuarios.">
 <input type="hidden" name="_csrf" value="<?= $e(\App\Core\Csrf::token()) ?>">
 <input type="hidden" name="periodo" value="<?= (int)$preview['period']['id'] ?>">
@@ -164,6 +164,18 @@ $missingCategories = array_values(array_filter($syncPlan, static fn($item) => $i
 <?php if (!empty($ep['reasons'])): ?><details><summary>Ver motivos</summary><ul><?php foreach ($ep['reasons'] as $reason=>$count): ?><li><?= $e($reason) ?>: <?= (int)$count ?></li><?php endforeach; ?></ul></details><?php endif; ?></td><td>Solo vista previa; pendiente verificar usuarios Moodle</td></tr>
 <?php endforeach; ?></tbody></table>
 <?php endif; ?>
+<h5 style="margin-top:1rem">Comparación individual de estudiantes · solo lectura</h5>
+<p class="muted">Los mapeos se obtienen por ID de usuario Orion. La consulta de participantes requiere core_enrol_get_enrolled_users en el servicio Moodle. No se matriculan usuarios ni se modifican grupos.</p>
+<?php foreach ($row['group_plan'] as $group): ?>
+<details style="margin-bottom:.7rem"><summary>Sección #<?= (int)$group['section_id'] ?> · <?= $e($group['parallel_code']) ?> — <?= count($group['student_details'] ?? []) ?> estudiantes elegibles</summary>
+<?php if (!empty($group['enrolled_read_error'])): ?><p class="alert warning"><?= $e($group['enrolled_read_error']) ?></p><?php endif; ?>
+<table><thead><tr><th>Código estudiante</th><th>ID Moodle</th><th>Mapeo Orion</th><th>Matrícula en curso</th></tr></thead><tbody>
+<?php foreach ($group['student_details'] ?? [] as $student): ?>
+<tr><td><?= $e($student['code']) ?></td><td><?= $student['moodle_id'] > 0 ? '#'.(int)$student['moodle_id'] : 'Sin identificar' ?></td><td><?= $e($student['mapping_status']) ?></td><td><?= $e($student['course_status']) ?></td></tr>
+<?php endforeach; ?>
+<?php if (empty($group['student_details'])): ?><tr><td colspan="4">No hay estudiantes académicamente elegibles.</td></tr><?php endif; ?>
+</tbody></table></details>
+<?php endforeach; ?>
 <p><strong>Curso destino:</strong> <?= $row['saved_mapping'] ? '#'.(int)$row['saved_mapping']['moodle_course_id'].' (vinculado)' : 'Pendiente de vinculación o creación' ?>.</p>
 </div>
 </div>

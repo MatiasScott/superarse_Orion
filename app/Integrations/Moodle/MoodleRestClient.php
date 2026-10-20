@@ -52,6 +52,13 @@ final class MoodleRestClient
         return $this->call('core_group_get_course_groups', ['courseid' => $courseId]);
     }
 
+    /** Participantes del curso: consulta de solo lectura, requiere core_enrol_get_enrolled_users. */
+    public function enrolledUsers(int $courseId): array
+    {
+        if ($courseId < 1) throw new RuntimeException('ID de curso inválido.');
+        return $this->call('core_enrol_get_enrolled_users', ['courseid'=>$courseId]);
+    }
+
     /** Crea un grupo en un curso validado; la confirmación se controla en el servidor Orion. */
     public function createGroup(int $courseId, string $name): array
     {

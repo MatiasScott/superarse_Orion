@@ -281,6 +281,45 @@ final class MoodleIntegrationController
                         foreach ($row['group_plan'] as $group) $sectionIds[] = (int)$group['section_id'];
                     }
                     $enrollmentCounts = (new MoodleEnrollmentPreview($db))->forSections($sectionIds);
+                    $studentRows = (new MoodleEnrollmentPreview($db))->studentsForSections($sectionIds);
+                    $links = [];
+                    if ($sectionIds) {
+                        $marks=implode(',',array_fill(0,count($sectionIds),'?'));
+                        $q=$db->prepare("SELECT seccion_id,moodle_course_id,moodle_group_id FROM orion_moodle_vinculos_grupo WHERE seccion_id IN ($marks)");
+                        $q->execute(array_values(array_unique($sectionIds)));
+                        foreach ($q->fetchAll(\PDO::FETCH_ASSOC) as $link) $links[(int)$link['seccion_id']]=$link;
+                    }
+                    $enrolledCache=[];
+                    foreach ($preview['rows'] as &$row) {
+                        $courseId=(int)($row['group_course_id'] ?? 0);
+                        if ($courseId > 0 && !isset($enrolledCache[$courseId])) {
+                            try {
+                                $users=$client->enrolledUsers($courseId);
+                                $enrolledCache[$courseId]=['ids'=>array_fill_keys(array_map('intval',array_column($users,'id')),true),'error'=>null];
+                            } catch (Throwable $ex) {
+                                $enrolledCache[$courseId]=['ids'=>[],'error'=>'No disponible: revisar permiso core_enrol_get_enrolled_users'];
+                            }
+                        }
+                        foreach ($row['group_plan'] as &$group) {
+                            $sectionId=(int)$group['section_id'];
+                            $link=$links[$sectionId] ?? null;
+                            $matches=$group['moodle_matches'];
+                            $group['saved_group_id']=$link && (int)$link['moodle_course_id']===$courseId ? (int)$link['moodle_group_id'] : 0;
+                            $group['group_link_verified']=$group['saved_group_id']>0 && count($matches)===1 && (int)$matches[0]['id']===$group['saved_group_id'];
+                            $group['student_details']=[];
+                            foreach ($studentRows[$sectionId] ?? [] as $student) {
+                                $maps=$student['mappings'];
+                                $status=count($maps)===0 ? 'Sin mapeo Moodle' : (count($maps)>1 ? 'Mapeo ambiguo' : (!empty($maps[0]['suspended']) ? 'Cuenta suspendida' : 'Mapeo local disponible'));
+                                $moodleId=count($maps)===1 ? $maps[0]['id'] : 0;
+                                $remote=$enrolledCache[$courseId] ?? ['ids'=>[],'error'=>'Curso no vinculado'];
+                                $courseStatus=$remote['error']!==null ? 'No verificable' : ($moodleId===0 ? 'Pendiente' : (isset($remote['ids'][$moodleId]) ? 'Ya matriculado' : 'No matriculado'));
+                                $group['student_details'][]=['code'=>$student['code'],'student_id'=>$student['student_id'], 'moodle_id'=>$moodleId,'mapping_status'=>$status,'course_status'=>$courseStatus];
+                            }
+                            $group['enrolled_read_error']=$enrolledCache[$courseId]['error'] ?? 'Curso no vinculado';
+                        }
+                        unset($group);
+                    }
+                    unset($row);
                     foreach ($preview['rows'] as &$row) {
                         foreach ($row['group_plan'] as &$group) {
                             $group['enrollment_preview'] = $enrollmentCounts[(int)$group['section_id']]
