@@ -102,7 +102,7 @@ foreach ($db->query('SELECT id,estudiante_id,carrera_id,malla_id,sede_id FROM es
 }
 $enrollments = [];
 $byNumber = [];
-foreach ($db->query('SELECT id,numero_matricula,estudiante_carrera_id,periodo_academico_id FROM matriculas WHERE deleted_at IS NULL') as $r) {
+foreach ($db->query('SELECT id,numero_matricula,estudiante_carrera_id,periodo_academico_id FROM matriculas WHERE activo = 1') as $r) {
     $m = [
         'id' => (int)$r['id'],
         'numero_matricula' => (string)$r['numero_matricula'],
