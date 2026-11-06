@@ -15,6 +15,32 @@ final class EvaluationController
         return new EvaluationRepository(Container::get(Database::class)->connection());
     }
 
+    public function sections(Request $r): void
+    {
+        AccessService::require('academico.oferta.ver');
+        $repo=$this->repo();
+        View::render('admin/academico/evaluacion/sections', [
+            'title'=>'Esquemas por sección',
+            'sections'=>$repo->sectionAssignments(),
+            'versions'=>$repo->assignableVersions(),
+        ]);
+    }
+
+    public function assignSection(Request $r): never
+    {
+        if (!Csrf::validate((string)$r->input('_csrf'))) Response::abort(419,'CSRF inválido.');
+        AccessService::require('academico.oferta.gestionar');
+        $actor=(int)(Session::get('auth_user')['id'] ?? 0);
+        try {
+            $this->repo()->assignVersionToSection(
+                (int)$r->input('seccion_id'),(int)$r->input('esquema_version_id'),$actor
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            Response::abort(422,$e->getMessage());
+        }
+        Response::redirect('/admin/academico/evaluacion/secciones');
+    }
+
     public function index(Request $r): void
     {
         AccessService::require('academico.oferta.ver');

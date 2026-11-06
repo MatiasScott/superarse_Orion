@@ -96,6 +96,8 @@ $router->get(
 
 
 // v0.11.38 - Evaluación: diagnóstico de esquemas (solo lectura)
+$router->get('/admin/academico/evaluacion/secciones', [\App\Controllers\Admin\EvaluationController::class, 'sections']);
+$router->post('/admin/academico/evaluacion/secciones/asignar', [\App\Controllers\Admin\EvaluationController::class, 'assignSection']);
 $router->get('/admin/academico/evaluacion', [\App\Controllers\Admin\EvaluationController::class, 'index']);
 $router->get('/admin/academico/evaluacion/ver', [\App\Controllers\Admin\EvaluationController::class, 'show']);
 $router->get('/admin/academico/evaluacion/borrador', [\App\Controllers\Admin\EvaluationController::class, 'cloneForm']);

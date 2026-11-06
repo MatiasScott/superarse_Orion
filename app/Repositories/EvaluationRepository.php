@@ -10,6 +10,95 @@ final class EvaluationRepository
 {
     public function __construct(private PDO $db) {}
 
+    /** Secciones y asignación histórica de su esquema. */
+    public function sectionAssignments(): array
+    {
+        return $this->db->query(
+            "SELECT s.id, s.codigo, s.nombre, s.fecha_apertura, s.activo,
+                    p.nombre AS periodo, a.nombre AS asignatura,
+                    es.nombre AS estado_seccion, see.id AS asignacion_id,
+                    see.esquema_version_id, see.bloqueado, see.fecha_asignacion,
+                    ev.numero_version, ee.nombre AS esquema_nombre
+             FROM secciones s
+             JOIN ofertas_academicas o ON o.id=s.oferta_academica_id
+             JOIN periodos_academicos p ON p.id=o.periodo_academico_id
+             JOIN malla_asignaturas ma ON ma.id=s.malla_asignatura_id
+             JOIN asignaturas a ON a.id=ma.asignatura_id
+             JOIN estados_seccion es ON es.id=s.estado_seccion_id
+             LEFT JOIN seccion_esquema_evaluacion see ON see.seccion_id=s.id
+             LEFT JOIN esquema_evaluacion_versiones ev ON ev.id=see.esquema_version_id
+             LEFT JOIN esquemas_evaluacion ee ON ee.id=ev.esquema_evaluacion_id
+             WHERE s.deleted_at IS NULL
+             ORDER BY p.fecha_inicio DESC, a.nombre, s.codigo, s.id
+             LIMIT 300"
+        )->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** Únicamente versiones publicadas vigentes hoy, sin alterar las históricas. */
+    public function assignableVersions(): array
+    {
+        return $this->db->query(
+            "SELECT v.id, v.numero_version, e.nombre AS esquema_nombre, v.vigente_desde
+             FROM esquema_evaluacion_versiones v
+             JOIN esquemas_evaluacion e ON e.id=v.esquema_evaluacion_id
+             JOIN estados_esquema_evaluacion st ON st.id=v.estado_esquema_id
+             WHERE st.codigo='PUBLICADO' AND st.activo=1
+               AND e.deleted_at IS NULL AND e.activo=1
+               AND v.vigente_desde<=CURDATE()
+               AND (v.vigente_hasta IS NULL OR v.vigente_hasta>=CURDATE())
+             ORDER BY e.nombre,v.numero_version DESC"
+        )->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** Asignación inicial única, atómica e inmutable. No sincroniza Moodle. */
+    public function assignVersionToSection(int $sectionId, int $versionId, int $actor): void
+    {
+        if ($sectionId<=0 || $versionId<=0 || $actor<=0) {
+            throw new \InvalidArgumentException('Sección, versión o usuario inválido.');
+        }
+        $this->db->beginTransaction();
+        try {
+            $q=$this->db->prepare(
+                'SELECT s.id,s.activo,s.deleted_at,s.fecha_apertura,o.activo AS oferta_activa '
+                .'FROM secciones s JOIN ofertas_academicas o ON o.id=s.oferta_academica_id '
+                .'WHERE s.id=? FOR UPDATE'
+            );
+            $q->execute([$sectionId]);
+            $section=$q->fetch(PDO::FETCH_ASSOC);
+            if (!$section || (int)$section['activo']!==1 || $section['deleted_at']!==null
+                || (int)$section['oferta_activa']!==1) {
+                throw new \RuntimeException('La sección no está activa o disponible.');
+            }
+            if ($section['fecha_apertura']!==null && strtotime((string)$section['fecha_apertura'])<=time()) {
+                throw new \RuntimeException('La sección ya inició; su esquema debe revisarse antes de asignar.');
+            }
+            $q=$this->db->prepare('SELECT id FROM seccion_esquema_evaluacion WHERE seccion_id=? FOR UPDATE');
+            $q->execute([$sectionId]);
+            if ($q->fetchColumn()) throw new \RuntimeException('Esta sección ya tiene un esquema asignado.');
+            $q=$this->db->prepare(
+                "SELECT v.id FROM esquema_evaluacion_versiones v
+                 JOIN estados_esquema_evaluacion st ON st.id=v.estado_esquema_id
+                 JOIN esquemas_evaluacion e ON e.id=v.esquema_evaluacion_id
+                 WHERE v.id=? AND st.codigo='PUBLICADO' AND st.activo=1
+                   AND e.activo=1 AND e.deleted_at IS NULL
+                   AND v.vigente_desde<=CURDATE()
+                   AND (v.vigente_hasta IS NULL OR v.vigente_hasta>=CURDATE()) FOR UPDATE"
+            );
+            $q->execute([$versionId]);
+            if (!$q->fetchColumn()) throw new \RuntimeException('Selecciona una versión publicada y vigente.');
+            $q=$this->db->prepare(
+                'INSERT INTO seccion_esquema_evaluacion '
+                .'(seccion_id,esquema_version_id,asignado_por_usuario_id,bloqueado,fecha_bloqueo,observacion) '
+                .'VALUES (?,?,?,1,NOW(),?)'
+            );
+            $q->execute([$sectionId,$versionId,$actor,'Asignación inicial bloqueada para preservar el historial académico']);
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            throw $e;
+        }
+    }
+
     public function versions(): array
     {
         return $this->db->query(
