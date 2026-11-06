@@ -312,10 +312,10 @@ final class AcademicEnrollmentRepository
                 $blocked = $approved !== null || $attempt['next'] > 3 || !$allPre || $higherInitialLevel || !(bool)$t['permite_matricula'] || (int)$t['activo'] !== 1;
                 $reason = $approved ? 'Asignatura ya aprobada/reconocida'
                     : ($attempt['next'] > 3 ? 'Límite de 3 intentos alcanzado'
-                    : (!$allPre ? 'Prerrequisitos pendientes'
-                    : ($higherInitialLevel ? 'Nivel superior al nivel referencial de una matrícula inicial'
-                    : (!(bool)$t['permite_matricula'] ? 'La trayectoria no permite matrícula'
-                    : ((int)$t['activo'] !== 1 ? 'Trayectoria inactiva' : '')))));
+                        : (!$allPre ? 'Prerrequisitos pendientes'
+                            : ($higherInitialLevel ? 'Nivel superior al nivel referencial de una matrícula inicial'
+                                : (!(bool)$t['permite_matricula'] ? 'La trayectoria no permite matrícula'
+                                    : ((int)$t['activo'] !== 1 ? 'Trayectoria inactiva' : '')))));
                 $subjects[$id] = ['malla_asignatura_id' => $id, 'codigo' => $r['codigo'], 'nombre' => $r['nombre'], 'nivel' => $r['nivel'], 'orden_nivel' => $r['orden_nivel'], 'creditos' => $r['creditos'], 'approved' => $approved, 'attempt' => $attempt, 'prerequisites' => $pre, 'eligible' => !$blocked, 'reason' => $reason, 'pending' => $attempt['max'] > 0 && !$approved, 'sections' => []];
             }
             if ($r['seccion_id']) {
@@ -463,7 +463,8 @@ final class AcademicEnrollmentRepository
                 // La sección ya está bloqueada FOR UPDATE en esta transacción.
                 // Verificación independiente del cálculo de la vista previa.
                 $cap = $this->db->prepare("SELECT s.cupo_maximo,(SELECT COUNT(DISTINCT ma.matricula_id) FROM matricula_asignaturas ma JOIN estados_matricula_asignatura em ON em.id=ma.estado_matricula_asignatura_id JOIN matriculas mm ON mm.id=ma.matricula_id JOIN estados_matricula emm ON emm.id=mm.estado_matricula_id WHERE ma.seccion_id=s.id AND ma.activo=1 AND mm.activo=1 AND em.codigo<>'ANULADA' AND emm.codigo<>'ANULADA') ocupados FROM secciones s WHERE s.id=?");
-                $cap->execute([$section]);$capacity=$cap->fetch();
+                $cap->execute([$section]);
+                $capacity = $cap->fetch();
                 if (!$capacity || $capacity['cupo_maximo'] === null || (int)$capacity['cupo_maximo'] <= 0) {
                     throw new RuntimeException('Esta asignatura no tiene un cupo autorizado válido. Contacta a Coordinación TICs.');
                 }
@@ -507,14 +508,35 @@ final class AcademicEnrollmentRepository
         $subjects = $this->enrollmentSubjects($id);
         if (!$subjects) throw new RuntimeException('La matrícula no contiene asignaturas.');
         $s = $this->db->prepare(
-            "SELECT eh.codigo,eh.habilita 
-            FROM habilitaciones_matricula h 
-            JOIN estados_habilitacion_matricula eh ON eh.id=h.estado_habilitacion_id 
-            WHERE h.estudiante_carrera_id=:t AND h.periodo_academico_id=:p 
+            "SELECT
+                eh.codigo,
+                eh.habilita
+            FROM habilitaciones_matricula h
+            JOIN estados_habilitacion_matricula eh
+            ON eh.id = h.estado_habilitacion_id
+            JOIN habilitaciones_financieras hf
+            ON hf.estudiante_carrera_id = h.estudiante_carrera_id
+            AND hf.periodo_academico_id = h.periodo_academico_id
+            JOIN estados_habilitacion_financiera ef
+            ON ef.id = hf.estado_habilitacion_financiera_id
+            WHERE h.estudiante_carrera_id = :t
+            AND h.periodo_academico_id = :p
+            AND eh.habilita = 1
+            AND ef.habilita_matricula = 1
+            AND hf.fecha_desde <= NOW()
+            AND (hf.fecha_hasta IS NULL OR hf.fecha_hasta >= NOW())
+            AND h.fecha_habilitacion IS NOT NULL
+            AND h.fecha_habilitacion <= NOW()
+            AND h.fecha_deshabilitacion IS NULL
             LIMIT 1"
         );
-        $s->execute(['t' => $m['estudiante_carrera_id'], 'p' => $m['periodo_academico_id']]);
-        $fin = $s->fetch();
+
+        $s->execute([
+            't' => $m['estudiante_carrera_id'],
+            'p' => $m['periodo_academico_id'],
+        ]);
+
+        $fin = $s->fetch(PDO::FETCH_ASSOC);
         $newCode = ($fin && (int)$fin['habilita'] === 1) ? 'CONFIRMADA' : 'PENDIENTE_FINANCIERO';
         $new = $this->idByCode('estados_matricula', $newCode);
         $old = (int)$m['estado_matricula_id'];
@@ -533,6 +555,103 @@ final class AcademicEnrollmentRepository
                 if ($activeId) {
                     $ut = $this->db->prepare("UPDATE estudiante_carreras ec JOIN estados_trayectoria_academica et ON et.id=ec.estado_trayectoria_id SET ec.estado_trayectoria_id=:e WHERE ec.id=:t AND et.codigo IN('PREMATRICULA','RENOVACION')");
                     $ut->execute(['e' => $activeId, 't' => $m['estudiante_carrera_id']]);
+                }
+            }
+
+            if ($newCode === 'CONFIRMADA') {
+
+                // Identificar al estudiante y bloquear su registro.
+                $studentStmt = $this->db->prepare(
+                    "SELECT
+            e.id,
+            e.estado_estudiante_id,
+            es.codigo AS estado_codigo
+         FROM estudiante_carreras ec
+         JOIN estudiantes e
+           ON e.id = ec.estudiante_id
+         JOIN estados_estudiante es
+           ON es.id = e.estado_estudiante_id
+         WHERE ec.id = :trayectoria
+           AND e.activo = 1
+           AND e.deleted_at IS NULL
+         FOR UPDATE"
+                );
+
+                $studentStmt->execute([
+                    'trayectoria' => $m['estudiante_carrera_id'],
+                ]);
+
+                $student = $studentStmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$student) {
+                    throw new RuntimeException(
+                        'No se encontró un estudiante activo para la trayectoria.'
+                    );
+                }
+
+                // Solo se permite esta transición automática.
+                if ($student['estado_codigo'] === 'PREMATRICULADO') {
+
+                    $stateStmt = $this->db->prepare(
+                        "SELECT id
+             FROM estados_estudiante
+             WHERE codigo = 'ACTIVO'
+               AND activo = 1
+             LIMIT 1"
+                    );
+
+                    $stateStmt->execute();
+                    $activeStudentStateId = (int) $stateStmt->fetchColumn();
+
+                    if ($activeStudentStateId <= 0) {
+                        throw new RuntimeException(
+                            'No existe el estado ACTIVO en estados_estudiante.'
+                        );
+                    }
+
+                    $updateStudent = $this->db->prepare(
+                        "UPDATE estudiantes
+             SET estado_estudiante_id = :estado_nuevo
+             WHERE id = :estudiante
+               AND estado_estudiante_id = :estado_anterior"
+                    );
+
+                    $updateStudent->execute([
+                        'estado_nuevo' => $activeStudentStateId,
+                        'estudiante' => $student['id'],
+                        'estado_anterior' => $student['estado_estudiante_id'],
+                    ]);
+
+                    if ($updateStudent->rowCount() !== 1) {
+                        throw new RuntimeException(
+                            'No se pudo completar la transición académica del estudiante.'
+                        );
+                    }
+
+                    // Registrar trazabilidad dentro de la misma transacción.
+                    $history = $this->db->prepare(
+                        "INSERT INTO historial_estado_estudiante (
+                estudiante_id,
+                estado_anterior_id,
+                estado_nuevo_id,
+                motivo,
+                cambiado_por_usuario_id
+             ) VALUES (
+                :estudiante,
+                :anterior,
+                :nuevo,
+                :motivo,
+                :usuario
+             )"
+                    );
+
+                    $history->execute([
+                        'estudiante' => $student['id'],
+                        'anterior' => $student['estado_estudiante_id'],
+                        'nuevo' => $activeStudentStateId,
+                        'motivo' => 'Activación por matrícula confirmada y habilitación financiera vigente en Orion',
+                        'usuario' => $actor > 0 ? $actor : null,
+                    ]);
                 }
             }
             $h = $this->db->prepare(
@@ -558,14 +677,23 @@ final class AcademicEnrollmentRepository
         if ($q !== '') {
             $like = '%' . $q . '%';
             $where[] = "(m.numero_matricula LIKE :q1 OR e.codigo_estudiante LIKE :q2 OR pe.numero_identificacion LIKE :q3 OR CONCAT_WS(' ',pe.primer_nombre,pe.segundo_nombre,pe.primer_apellido,pe.segundo_apellido) LIKE :q4)";
-            foreach (['q1','q2','q3','q4'] as $key) $params[$key] = $like;
+            foreach (['q1', 'q2', 'q3', 'q4'] as $key) $params[$key] = $like;
         }
         $estado = trim((string)($filters['estado'] ?? ''));
-        if ($estado !== '') { $where[] = 'em.codigo = :estado'; $params['estado'] = $estado; }
+        if ($estado !== '') {
+            $where[] = 'em.codigo = :estado';
+            $params['estado'] = $estado;
+        }
         $periodo = (int)($filters['periodo'] ?? 0);
-        if ($periodo > 0) { $where[] = 'm.periodo_academico_id = :periodo'; $params['periodo'] = $periodo; }
+        if ($periodo > 0) {
+            $where[] = 'm.periodo_academico_id = :periodo';
+            $params['periodo'] = $periodo;
+        }
         $carrera = (int)($filters['carrera'] ?? 0);
-        if ($carrera > 0) { $where[] = 'ec.carrera_id = :carrera'; $params['carrera'] = $carrera; }
+        if ($carrera > 0) {
+            $where[] = 'ec.carrera_id = :carrera';
+            $params['carrera'] = $carrera;
+        }
         $from = " FROM matriculas m
             JOIN estados_matricula em ON em.id=m.estado_matricula_id
             JOIN periodos_academicos p ON p.id=m.periodo_academico_id
@@ -573,29 +701,29 @@ final class AcademicEnrollmentRepository
             JOIN estudiantes e ON e.id=ec.estudiante_id
             JOIN personas pe ON pe.id=e.persona_id
             JOIN carreras c ON c.id=ec.carrera_id ";
-        $condition = $where ? ' WHERE '.implode(' AND ', $where) : '';
-        $count = $this->db->prepare('SELECT COUNT(*)'.$from.$condition);
+        $condition = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+        $count = $this->db->prepare('SELECT COUNT(*)' . $from . $condition);
         $count->execute($params);
         $total = (int)$count->fetchColumn();
-        $pages = max(1, (int)ceil($total/$perPage));
+        $pages = max(1, (int)ceil($total / $perPage));
         $page = min($page, $pages);
-        $offset = ($page-1)*$perPage;
+        $offset = ($page - 1) * $perPage;
         $sql = "SELECT m.id,m.numero_matricula,em.codigo estado_codigo,em.nombre estado,
             p.nombre periodo,c.nombre carrera,e.codigo_estudiante,
             CONCAT_WS(' ',pe.primer_nombre,pe.segundo_nombre,pe.primer_apellido,pe.segundo_apellido) estudiante,
             (SELECT COUNT(*) FROM matricula_asignaturas ma WHERE ma.matricula_id=m.id AND ma.activo=1) asignaturas"
-            .$from.$condition.' ORDER BY m.id DESC LIMIT '.$perPage.' OFFSET '.$offset;
+            . $from . $condition . ' ORDER BY m.id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset;
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
-        return ['rows'=>$stmt->fetchAll(), 'total'=>$total, 'page'=>$page, 'pages'=>$pages];
+        return ['rows' => $stmt->fetchAll(), 'total' => $total, 'page' => $page, 'pages' => $pages];
     }
 
     public function enrollmentHistoryFilters(): array
     {
         return [
-            'estados'=>$this->db->query('SELECT codigo,nombre FROM estados_matricula ORDER BY nombre')->fetchAll(),
-            'periodos'=>$this->db->query('SELECT id,nombre FROM periodos_academicos ORDER BY fecha_inicio DESC,id DESC LIMIT 150')->fetchAll(),
-            'carreras'=>$this->db->query('SELECT id,nombre FROM carreras ORDER BY nombre')->fetchAll(),
+            'estados' => $this->db->query('SELECT codigo,nombre FROM estados_matricula ORDER BY nombre')->fetchAll(),
+            'periodos' => $this->db->query('SELECT id,nombre FROM periodos_academicos ORDER BY fecha_inicio DESC,id DESC LIMIT 150')->fetchAll(),
+            'carreras' => $this->db->query('SELECT id,nombre FROM carreras ORDER BY nombre')->fetchAll(),
         ];
     }
 
@@ -607,13 +735,15 @@ final class AcademicEnrollmentRepository
 
     public function bulkAcademicConfirm(array $ids, int $actor): array
     {
-        $ok = 0; $pending = 0; $errors = [];
+        $ok = 0;
+        $pending = 0;
+        $errors = [];
         foreach (array_values(array_unique(array_filter(array_map('intval', $ids)))) as $id) {
             try {
                 $state = $this->academicConfirm($id, $actor);
                 $state === 'CONFIRMADA' ? $ok++ : $pending++;
             } catch (Throwable $e) {
-                $errors[] = 'Matrícula '.$id.': '.$e->getMessage();
+                $errors[] = 'Matrícula ' . $id . ': ' . $e->getMessage();
             }
         }
         return ['confirmadas' => $ok, 'pendientes_financiero' => $pending, 'errores' => $errors];

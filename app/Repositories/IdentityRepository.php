@@ -161,6 +161,11 @@ final class IdentityRepository
         try {
             $s = $this->db->prepare("UPDATE sesiones_usuario SET perfil_actual_id=:pid,ultimo_movimiento_at=NOW() WHERE id=:id AND activa=1");
             $s->execute(['pid' => $to, 'id' => $sessionId]);
+            if ($s->rowCount() !== 1) {
+                throw new \RuntimeException(
+                    'No se pudo actualizar el perfil: la sesión no está activa.'
+                );
+            }
             $h = $this->db->prepare("INSERT INTO historial_cambio_perfil(sesion_id,perfil_origen_id,perfil_destino_id) VALUES(:sid,:ori,:des)");
             $h->execute(['sid' => $sessionId, 'ori' => $from, 'des' => $to]);
             $this->db->commit();

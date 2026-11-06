@@ -10,3 +10,5 @@
 !/storage/exports/.gitkeep
 /storage/reports/*
 !/storage/reports/.gitkeep
+/NOTAS/
+/tests/

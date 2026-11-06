@@ -1,0 +1,335 @@
+stdout is not a tty
+57c9b61 Orion v0.11.35 - Diagnosticos y conciliacion Q10
+?? NOTAS/
+?? storage/auditoria/
+?? storage/conciliacion/v01134/
+?? storage/conciliacion/v01135/
+app/Controllers/Admin/AcademicCatalogController.php
+app/Controllers/Admin/AcademicEnrollmentController.php
+app/Controllers/Admin/AcademicHistoryController.php
+app/Controllers/Admin/AcademicOfferingController.php
+app/Controllers/Admin/AcademicTrajectoryController.php
+app/Controllers/Admin/AdmissionsController.php
+app/Controllers/Admin/CapacityRequestController.php
+app/Controllers/Admin/FinanceController.php
+app/Controllers/Admin/HumanResourcesController.php
+app/Controllers/Admin/IdentityAdminController.php
+app/Controllers/Admin/MoodleIntegrationController.php
+app/Controllers/Admin/TicProvisioningController.php
+app/Controllers/Auth/DevAuthController.php
+app/Controllers/Auth/LoginController.php
+app/Controllers/Auth/MicrosoftAuthController.php
+app/Controllers/DashboardController.php
+app/Controllers/HealthController.php
+app/Controllers/HomeController.php
+app/Controllers/ProfileController.php
+app/Controllers/Student/StudentFinanceController.php
+app/Core/App.php
+app/Core/Config.php
+app/Core/Container.php
+app/Core/Csrf.php
+app/Core/Database.php
+app/Core/ErrorHandler.php
+app/Core/Request.php
+app/Core/Response.php
+app/Core/Router.php
+app/Core/Session.php
+app/Core/View.php
+app/Integrations/Microsoft/MicrosoftGraphClient.php
+app/Integrations/Microsoft/MicrosoftOidcClient.php
+app/Integrations/Moodle/MoodleAcademicPreview.php
+app/Integrations/Moodle/MoodleCategorySync.php
+app/Integrations/Moodle/MoodleCourseSync.php
+app/Integrations/Moodle/MoodleEnrollmentPreview.php
+app/Integrations/Moodle/MoodleInstitutionalTemplate.php
+app/Integrations/Moodle/MoodleProvisioningPreflight.php
+app/Integrations/Moodle/MoodleRestClient.php
+app/Repositories/AcademicCatalogRepository.php
+app/Repositories/AcademicEnrollmentRepository.php
+app/Repositories/AcademicHistoryRepository.php
+app/Repositories/AcademicOfferingRepository.php
+app/Repositories/AcademicTrajectoryRepository.php
+app/Repositories/AdminRepository.php
+app/Repositories/AdmissionsRepository.php
+app/Repositories/CapacityRequestRepository.php
+app/Repositories/CohortCapacityRepository.php
+app/Repositories/FinanceRepository.php
+app/Repositories/HumanResourcesRepository.php
+app/Repositories/IdentityRepository.php
+app/Repositories/MicrosoftIdentityRepository.php
+app/Repositories/TicProvisioningRepository.php
+app/Routes/web.php
+app/Services/AccessService.php
+app/Services/AuthService.php
+app/Services/MicrosoftAuthService.php
+app/Services/MoodleAcademicEligibilityService.php
+app/Services/TicProvisioningService.php
+app/Views/admin/academico/catalogos/campus-form.php
+app/Views/admin/academico/catalogos/career-form.php
+app/Views/admin/academico/catalogos/curriculum-form.php
+app/Views/admin/academico/catalogos/index.php
+app/Views/admin/academico/cupos/index.php
+app/Views/admin/academico/cupos/request.php
+app/Views/admin/academico/estructura/index.php
+app/Views/admin/academico/estructura/malla.php
+app/Views/admin/academico/historial/student.php
+app/Views/admin/academico/matriculas/index.php
+app/Views/admin/academico/matriculas/proposal.php
+app/Views/admin/academico/matriculas/show.php
+app/Views/admin/academico/matriculas/student.php
+app/Views/admin/academico/oferta/index.php
+app/Views/admin/academico/oferta/offer-form.php
+app/Views/admin/academico/oferta/period-form.php
+app/Views/admin/academico/oferta/show.php
+app/Views/admin/academico/trayectorias/student.php
+app/Views/admin/admisiones/form.php
+app/Views/admin/admisiones/index.php
+app/Views/admin/admisiones/show.php
+app/Views/admin/estudiantes/index.php
+app/Views/admin/estudiantes/show.php
+app/Views/admin/financiero/index.php
+app/Views/admin/financiero/order.php
+app/Views/admin/financiero/tariffs.php
+app/Views/admin/permisos/index.php
+app/Views/admin/permisos/matrix.php
+app/Views/admin/roles/form.php
+app/Views/admin/roles/index.php
+app/Views/admin/tic/account.php
+app/Views/admin/tic/accounts.php
+app/Views/admin/tic/cupos.php
+app/Views/admin/tic/index.php
+app/Views/admin/tic/licenses.php
+app/Views/admin/tic/moodle.php
+app/Views/admin/tic/password-result.php
+app/Views/admin/tic/result.php
+app/Views/admin/tic/show.php
+app/Views/admin/tthh/catalogs.php
+app/Views/admin/tthh/form.php
+app/Views/admin/tthh/index.php
+app/Views/admin/tthh/requests.php
+app/Views/admin/usuarios/form.php
+app/Views/admin/usuarios/index.php
+app/Views/auth/dev-login.php
+app/Views/auth/login.php
+app/Views/dashboard/authenticated.php
+app/Views/dashboard/index.php
+app/Views/layouts/app.php
+app/Views/layouts/guest.php
+app/Views/profile/select.php
+app/Views/student/finance/index.php
+bootstrap/app.php
+database/migrations/019_orion_financiero_tarifa_por_pao_anulacion.sql
+database/migrations/020_orion_financiero_reparacion_v0103.sql
+database/migrations/021_orion_motor_tarifario_oficial_v0104.sql
+database/migrations/022_orion_reparacion_motor_tarifario_v0104_1.sql
+database/migrations/023_orion_calendario_cuotas_snapshot_v0106.sql
+database/migrations/023_orion_moodle_estructura_v0112.sql
+database/migrations/025_orion_moodle_vinculacion_v0113.sql
+database/migrations/026_orion_moodle_categorias_v0114.sql
+database/migrations/027_orion_moodle_cursos_v0115.sql
+database/migrations/028_orion_cupos_v0118.sql
+database/migrations/028_orion_moodle_grupos_v01122.sql
+database/migrations/029_orion_solicitudes_cupos_v0119.sql
+database/migrations/030_orion_cupos_cohorte_v01112.sql
+database/schema/000_ORDEN_EJECUCION.sql
+database/schema/001_core_definitivo_superarse_siga.sql
+database/schema/002_identidad_microsoft_superarse_siga.sql
+database/schema/003_talento_humano_superarse_siga.sql
+database/schema/004_admisiones_estudiantes_superarse_siga.sql
+database/schema/005_estructura_academica_superarse_siga.sql
+database/schema/006_periodos_oferta_academica_superarse_siga.sql
+database/schema/007_matriculas_superarse_siga.sql
+database/schema/008_evaluacion_calificaciones_superarse_siga.sql
+database/schema/009_asistencia_superarse_siga.sql
+database/schema/010_financiero_superarse_siga.sql
+database/schema/011_becas_bienestar_superarse_siga.sql
+database/schema/012_expediente_documental_superarse_siga.sql
+database/schema/013_practicas_vinculacion_superarse_siga.sql
+database/schema/014_titulacion_superarse_siga.sql
+database/schema/015_encuestas_superarse_siga.sql
+database/schema/016_certificados_superarse_siga.sql
+database/schema/017_integracion_moodle_superarse_siga.sql
+database/schema/018_motor_automatizacion_superarse_siga.sql
+database/schema/019_notificaciones_comunicaciones_superarse_siga.sql
+database/schema/020_auditoria_seguridad_superarse_siga.sql
+database/schema/021_reportes_indicadores_superarse_siga.sql
+database/schema/022_integracion_microsoft_365_superarse_siga.sql
+database/schema/023_configuracion_sistema_parametros_superarse_siga.sql
+database/seeds/001_orion_admin_rbac.sql
+database/seeds/002_orion_tthh_rbac.sql
+database/seeds/003_orion_tic_microsoft_rbac.sql
+database/seeds/004_orion_tic_license_policy.sql
+database/seeds/005_orion_tic_admin.sql
+database/seeds/006_orion_admisiones_estudiantes_rbac.sql
+database/seeds/007_orion_academico_catalogos_rbac.sql
+database/seeds/008_orion_socioeconomico_actualizacion.sql
+database/seeds/009_orion_trayectoria_academica_rbac.sql
+database/seeds/010_orion_importacion_academica_q10.sql
+database/seeds/011_orion_historico_q10.sql
+database/seeds/012_validacion_historico_q10.sql
+database/seeds/013_reconciliacion_historico_q10.sql
+database/seeds/014_orion_historial_academico_rbac.sql
+database/seeds/015_orion_oferta_academica_rbac.sql
+database/seeds/016_orion_matriculas_rbac.sql
+database/seeds/017_orion_financiero_rbac.sql
+database/seeds/018_orion_aranceles_pao_mayo_octubre_2026.sql
+public/index.php
+scripts/conciliacion_estudiantes_v01132.php
+scripts/conciliacion_estudiantes_v01133.php
+scripts/conciliacion_estudiantes_v01134.php
+scripts/diagnostico_catalogos_v01134.php
+scripts/diagnostico_celdas_notas_v01135.php
+scripts/diagnostico_cobertura_ofertas_v01134.php
+scripts/diagnostico_cruce_matriculas_v01134.php
+scripts/diagnostico_encabezados_v01134.php
+scripts/diagnostico_formatos_notas_v01135.php
+scripts/diagnostico_importacion_v01132.php
+scripts/diagnostico_mallas_v01132.php
+scripts/diagnostico_matriculas_unicas_v01134.php
+scripts/diagnostico_notas_v01135.php
+scripts/diagnostico_oferta_v01132.php
+scripts/diagnostico_pendientes_v01134.php
+scripts/diagnostico_rutas_q10_v01135.php
+scripts/diagnostico_transicion_moodle_v01132.php
+scripts/diagnostico_trayectorias_v01134.php
+scripts/import_historico_q10.php
+scripts/reconciliar_matriculas_financieras.php
+scripts/test_moodle_academic_eligibility.php
+scripts/test_moodle_connection.php
+No syntax errors detected in app/Controllers/Admin/AcademicCatalogController.php
+No syntax errors detected in app/Controllers/Admin/AcademicEnrollmentController.php
+No syntax errors detected in app/Controllers/Admin/AcademicHistoryController.php
+No syntax errors detected in app/Controllers/Admin/AcademicOfferingController.php
+No syntax errors detected in app/Controllers/Admin/AcademicTrajectoryController.php
+No syntax errors detected in app/Controllers/Admin/AdmissionsController.php
+No syntax errors detected in app/Controllers/Admin/CapacityRequestController.php
+No syntax errors detected in app/Controllers/Admin/FinanceController.php
+No syntax errors detected in app/Controllers/Admin/HumanResourcesController.php
+No syntax errors detected in app/Controllers/Admin/IdentityAdminController.php
+No syntax errors detected in app/Controllers/Admin/MoodleIntegrationController.php
+No syntax errors detected in app/Controllers/Admin/TicProvisioningController.php
+No syntax errors detected in app/Controllers/Auth/DevAuthController.php
+No syntax errors detected in app/Controllers/Auth/LoginController.php
+No syntax errors detected in app/Controllers/Auth/MicrosoftAuthController.php
+No syntax errors detected in app/Controllers/DashboardController.php
+No syntax errors detected in app/Controllers/HealthController.php
+No syntax errors detected in app/Controllers/HomeController.php
+No syntax errors detected in app/Controllers/ProfileController.php
+No syntax errors detected in app/Controllers/Student/StudentFinanceController.php
+No syntax errors detected in app/Core/App.php
+No syntax errors detected in app/Core/Config.php
+No syntax errors detected in app/Core/Container.php
+No syntax errors detected in app/Core/Csrf.php
+No syntax errors detected in app/Core/Database.php
+No syntax errors detected in app/Core/ErrorHandler.php
+No syntax errors detected in app/Core/Request.php
+No syntax errors detected in app/Core/Response.php
+No syntax errors detected in app/Core/Router.php
+No syntax errors detected in app/Core/Session.php
+No syntax errors detected in app/Core/View.php
+No syntax errors detected in app/Integrations/Microsoft/MicrosoftGraphClient.php
+No syntax errors detected in app/Integrations/Microsoft/MicrosoftOidcClient.php
+No syntax errors detected in app/Integrations/Moodle/MoodleAcademicPreview.php
+No syntax errors detected in app/Integrations/Moodle/MoodleCategorySync.php
+No syntax errors detected in app/Integrations/Moodle/MoodleCourseSync.php
+No syntax errors detected in app/Integrations/Moodle/MoodleEnrollmentPreview.php
+No syntax errors detected in app/Integrations/Moodle/MoodleInstitutionalTemplate.php
+No syntax errors detected in app/Integrations/Moodle/MoodleProvisioningPreflight.php
+No syntax errors detected in app/Integrations/Moodle/MoodleRestClient.php
+No syntax errors detected in app/Repositories/AcademicCatalogRepository.php
+No syntax errors detected in app/Repositories/AcademicEnrollmentRepository.php
+No syntax errors detected in app/Repositories/AcademicHistoryRepository.php
+No syntax errors detected in app/Repositories/AcademicOfferingRepository.php
+No syntax errors detected in app/Repositories/AcademicTrajectoryRepository.php
+No syntax errors detected in app/Repositories/AdminRepository.php
+No syntax errors detected in app/Repositories/AdmissionsRepository.php
+No syntax errors detected in app/Repositories/CapacityRequestRepository.php
+No syntax errors detected in app/Repositories/CohortCapacityRepository.php
+No syntax errors detected in app/Repositories/FinanceRepository.php
+No syntax errors detected in app/Repositories/HumanResourcesRepository.php
+No syntax errors detected in app/Repositories/IdentityRepository.php
+No syntax errors detected in app/Repositories/MicrosoftIdentityRepository.php
+No syntax errors detected in app/Repositories/TicProvisioningRepository.php
+No syntax errors detected in app/Routes/web.php
+No syntax errors detected in app/Services/AccessService.php
+No syntax errors detected in app/Services/AuthService.php
+No syntax errors detected in app/Services/MicrosoftAuthService.php
+No syntax errors detected in app/Services/MoodleAcademicEligibilityService.php
+No syntax errors detected in app/Services/TicProvisioningService.php
+No syntax errors detected in app/Views/admin/academico/catalogos/campus-form.php
+No syntax errors detected in app/Views/admin/academico/catalogos/career-form.php
+No syntax errors detected in app/Views/admin/academico/catalogos/curriculum-form.php
+No syntax errors detected in app/Views/admin/academico/catalogos/index.php
+No syntax errors detected in app/Views/admin/academico/cupos/index.php
+No syntax errors detected in app/Views/admin/academico/cupos/request.php
+No syntax errors detected in app/Views/admin/academico/estructura/index.php
+No syntax errors detected in app/Views/admin/academico/estructura/malla.php
+No syntax errors detected in app/Views/admin/academico/historial/student.php
+No syntax errors detected in app/Views/admin/academico/matriculas/index.php
+No syntax errors detected in app/Views/admin/academico/matriculas/proposal.php
+No syntax errors detected in app/Views/admin/academico/matriculas/show.php
+No syntax errors detected in app/Views/admin/academico/matriculas/student.php
+No syntax errors detected in app/Views/admin/academico/oferta/index.php
+No syntax errors detected in app/Views/admin/academico/oferta/offer-form.php
+No syntax errors detected in app/Views/admin/academico/oferta/period-form.php
+No syntax errors detected in app/Views/admin/academico/oferta/show.php
+No syntax errors detected in app/Views/admin/academico/trayectorias/student.php
+No syntax errors detected in app/Views/admin/admisiones/form.php
+No syntax errors detected in app/Views/admin/admisiones/index.php
+No syntax errors detected in app/Views/admin/admisiones/show.php
+No syntax errors detected in app/Views/admin/estudiantes/index.php
+No syntax errors detected in app/Views/admin/estudiantes/show.php
+No syntax errors detected in app/Views/admin/financiero/index.php
+No syntax errors detected in app/Views/admin/financiero/order.php
+No syntax errors detected in app/Views/admin/financiero/tariffs.php
+No syntax errors detected in app/Views/admin/permisos/index.php
+No syntax errors detected in app/Views/admin/permisos/matrix.php
+No syntax errors detected in app/Views/admin/roles/form.php
+No syntax errors detected in app/Views/admin/roles/index.php
+No syntax errors detected in app/Views/admin/tic/account.php
+No syntax errors detected in app/Views/admin/tic/accounts.php
+No syntax errors detected in app/Views/admin/tic/cupos.php
+No syntax errors detected in app/Views/admin/tic/index.php
+No syntax errors detected in app/Views/admin/tic/licenses.php
+No syntax errors detected in app/Views/admin/tic/moodle.php
+No syntax errors detected in app/Views/admin/tic/password-result.php
+No syntax errors detected in app/Views/admin/tic/result.php
+No syntax errors detected in app/Views/admin/tic/show.php
+No syntax errors detected in app/Views/admin/tthh/catalogs.php
+No syntax errors detected in app/Views/admin/tthh/form.php
+No syntax errors detected in app/Views/admin/tthh/index.php
+No syntax errors detected in app/Views/admin/tthh/requests.php
+No syntax errors detected in app/Views/admin/usuarios/form.php
+No syntax errors detected in app/Views/admin/usuarios/index.php
+No syntax errors detected in app/Views/auth/dev-login.php
+No syntax errors detected in app/Views/auth/login.php
+No syntax errors detected in app/Views/dashboard/authenticated.php
+No syntax errors detected in app/Views/dashboard/index.php
+No syntax errors detected in app/Views/layouts/app.php
+No syntax errors detected in app/Views/layouts/guest.php
+No syntax errors detected in app/Views/profile/select.php
+No syntax errors detected in app/Views/student/finance/index.php
+No syntax errors detected in bootstrap/app.php
+No syntax errors detected in public/index.php
+No syntax errors detected in scripts/conciliacion_estudiantes_v01132.php
+No syntax errors detected in scripts/conciliacion_estudiantes_v01133.php
+No syntax errors detected in scripts/conciliacion_estudiantes_v01134.php
+No syntax errors detected in scripts/diagnostico_catalogos_v01134.php
+No syntax errors detected in scripts/diagnostico_celdas_notas_v01135.php
+No syntax errors detected in scripts/diagnostico_cobertura_ofertas_v01134.php
+No syntax errors detected in scripts/diagnostico_cruce_matriculas_v01134.php
+No syntax errors detected in scripts/diagnostico_encabezados_v01134.php
+No syntax errors detected in scripts/diagnostico_formatos_notas_v01135.php
+No syntax errors detected in scripts/diagnostico_importacion_v01132.php
+No syntax errors detected in scripts/diagnostico_mallas_v01132.php
+No syntax errors detected in scripts/diagnostico_matriculas_unicas_v01134.php
+No syntax errors detected in scripts/diagnostico_notas_v01135.php
+No syntax errors detected in scripts/diagnostico_oferta_v01132.php
+No syntax errors detected in scripts/diagnostico_pendientes_v01134.php
+No syntax errors detected in scripts/diagnostico_rutas_q10_v01135.php
+No syntax errors detected in scripts/diagnostico_transicion_moodle_v01132.php
+No syntax errors detected in scripts/diagnostico_trayectorias_v01134.php
+No syntax errors detected in scripts/import_historico_q10.php
+No syntax errors detected in scripts/reconciliar_matriculas_financieras.php
+No syntax errors detected in scripts/test_moodle_academic_eligibility.php
+No syntax errors detected in scripts/test_moodle_connection.php
