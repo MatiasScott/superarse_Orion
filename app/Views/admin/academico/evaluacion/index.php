@@ -1,0 +1,10 @@
+<?php
+$u=rtrim($_ENV['APP_URL']??'','/');
+$h=static fn($v):string=>htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');
+?>
+<div class="page-head"><div><span class="eyebrow">ACADÉMICO · EVALUACIÓN</span><h1>Esquemas de evaluación</h1><p>Consulta de versiones y diagnóstico de ponderaciones. No modifica notas ni sincroniza Moodle.</p></div><a href="<?=$h($u)?>/admin/academico/oferta">Volver a oferta</a></div>
+<div class="stats-grid"><div class="stat-card"><span>Versiones registradas</span><strong><?=count($versions)?></strong></div><div class="stat-card"><span>Versiones publicadas</span><strong><?=count(array_filter($versions,static fn($v)=>(int)$v['es_publicado']===1))?></strong></div><div class="stat-card"><span>Versiones con ponderación incompleta</span><strong><?=count(array_filter($versions,static fn($v)=>(int)$v['parciales']===0 || abs((float)$v['total_ponderacion']-100)>0.001))?></strong></div></div>
+<section class="card"><div class="section-head"><h2>Versiones de esquemas</h2></div><div class="table-scroll"><table><thead><tr><th>Esquema</th><th>Versión</th><th>Estado</th><th>Parciales</th><th>Ponderación activa</th><th>Vigencia</th><th></th></tr></thead><tbody>
+<?php foreach($versions as $v): $valid=(int)$v['parciales']>0 && abs((float)$v['total_ponderacion']-100)<0.001; ?>
+<tr><td><strong><?=$h($v['esquema_nombre'])?></strong><br><small><?=$h($v['esquema_codigo'])?></small></td><td>v<?=$h($v['numero_version'])?> <?=$h($v['nombre_version']??'')?></td><td><?=$h($v['estado_nombre'])?></td><td><?=$h($v['parciales'])?></td><td><span class="badge <?=$valid?'success':'muted'?>"><?=$h($v['total_ponderacion'])?> %<?=$valid?'':' · revisar'?></span></td><td><?=$h($v['vigente_desde'])?> — <?=$h($v['vigente_hasta']??'Sin fecha fin')?></td><td><a href="<?=$h($u)?>/admin/academico/evaluacion/ver?id=<?=(int)$v['id']?>">Revisar</a></td></tr>
+<?php endforeach; if(!$versions):?><tr><td colspan="7">No hay versiones de evaluación registradas. No se ha creado ningún esquema automáticamente.</td></tr><?php endif;?></tbody></table></div></section>

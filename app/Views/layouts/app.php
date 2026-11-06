@@ -35,6 +35,7 @@ $user=Session::get('auth_user');$profile=Session::get('active_profile');
 <?php if(AccessService::can('academico.catalogos.ver')):?><a href="<?=$u?>/admin/academico/catalogos">Catálogos académicos</a><?php endif;?>
 <?php if(AccessService::can('academico.estructura.ver')):?><a href="<?=$u?>/admin/academico/estructura">Estructura académica</a><?php endif;?>
 <?php if(AccessService::can('academico.oferta.ver')):?><a href="<?=$u?>/admin/academico/oferta">Períodos y oferta</a><?php endif;?>
+<?php if(AccessService::can('academico.oferta.ver')):?><a href="<?=$u?>/admin/academico/evaluacion">Evaluación</a><?php endif;?>
 <?php if(AccessService::can('academico.matriculas.ver')):?><a href="<?=$u?>/admin/academico/matriculas">Matrículas y renovación</a><a href="<?=$u?>/admin/academico/cupos">Control de cupos</a><?php endif;?>
 <?php endif;?>
 <?php if(AccessService::can('financiero.ver')): ?><div class="nav-label">FINANCIERO</div><a href="<?=$u?>/admin/financiero">Órdenes y pagos</a><?php else: ?><div class="nav-label">PRÓXIMOS MÓDULOS</div><a class="muted-link">Financiero</a><?php endif;?>
