@@ -101,6 +101,7 @@ $router->get('/admin/academico/evaluacion/ver', [\App\Controllers\Admin\Evaluati
 $router->get('/admin/academico/evaluacion/borrador', [\App\Controllers\Admin\EvaluationController::class, 'cloneForm']);
 $router->post('/admin/academico/evaluacion/borrador/save', [\App\Controllers\Admin\EvaluationController::class, 'cloneSave']);
 $router->post('/admin/academico/evaluacion/ponderaciones/save', [\App\Controllers\Admin\EvaluationController::class, 'weightsSave']);
+$router->post('/admin/academico/evaluacion/publicar/save', [\App\Controllers\Admin\EvaluationController::class, 'publishSave']);
 
 // Talento Humano v0.5.0
 $router->get(

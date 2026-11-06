@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
-use App\Core\{Container,Csrf,Database,Request,Response,View};
+use App\Core\{Container,Csrf,Database,Request,Response,Session,View};
 use App\Repositories\EvaluationRepository;
 use App\Services\AccessService;
 
@@ -72,6 +72,20 @@ final class EvaluationController
             $this->repo()->updateDraftWeights($id,(array)$r->input('parciales',[]),(array)$r->input('parametros',[]));
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             Response::abort(422,$e->getMessage());
+        }
+        Response::redirect('/admin/academico/evaluacion/ver?id='.$id);
+    }
+
+    public function publishSave(Request $r): never
+    {
+        if (!Csrf::validate((string)$r->input('_csrf'))) Response::abort(419,'CSRF inválido.');
+        AccessService::require('academico.oferta.gestionar');
+        $id = (int)$r->input('id');
+        $actor = (int)(Session::get('auth_user')['id'] ?? 0);
+        try {
+            $this->repo()->publishDraft($id, $actor);
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            Response::abort(422, $e->getMessage());
         }
         Response::redirect('/admin/academico/evaluacion/ver?id='.$id);
     }

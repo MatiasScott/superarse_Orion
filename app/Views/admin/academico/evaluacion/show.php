@@ -23,3 +23,14 @@ foreach($active as $p){if((int)$p['parametros']===0 || abs((float)$p['total_para
 <?php foreach ($parameters as $pa): ?><label style="display:block;margin:12px 0"><?=$h($pa['codigo'])?> · <?=$h($pa['nombre'])?> <input type="number" min="0.01" max="100" step="0.01" required name="parametros[<?=(int)$pa['id']?>]" value="<?=$h($pa['ponderacion_parcial'])?>"> %</label><?php endforeach; ?>
 <button type="submit" class="btn btn-primary">Guardar ponderaciones del borrador</button></form></section>
 <?php endif; ?>
+
+<?php if ($version['estado_codigo']==='BORRADOR'): ?>
+<section class="card"><div class="section-head"><h2>Publicar versión de evaluación</h2></div>
+<p>La publicación requiere P1 y P2 al 50 % cada uno, con parámetros activos que sumen 100 % por parcial. Se archivará la versión actualmente publicada del mismo esquema y se conservará su historial.</p>
+<?php if ($valid && count($active)===2 && count(array_filter($active, static fn($p)=>in_array(strtoupper((string)$p['codigo']),['P1','P2'],true) && abs((float)$p['ponderacion_nota_final']-50)<0.001))===2): ?>
+<form method="post" action="<?=$h($u)?>/admin/academico/evaluacion/publicar/save" onsubmit="return confirm('¿Publicar esta versión? La versión anterior quedará histórica y no se podrá editar.');">
+<input type="hidden" name="_csrf" value="<?=$h(\App\Core\Csrf::token())?>"><input type="hidden" name="id" value="<?=(int)$version['id']?>">
+<button type="submit" class="btn btn-primary">Publicar versión</button></form>
+<?php else: ?><p><strong>Publicación bloqueada:</strong> revisa los dos parciales y sus ponderaciones.</p><?php endif; ?>
+</section>
+<?php endif; ?>

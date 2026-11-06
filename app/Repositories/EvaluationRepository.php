@@ -164,4 +164,77 @@ final class EvaluationRepository
         }
     }
 
+    /** Publicación atómica: valida P1/P2, archiva la versión anterior y registra auditoría. */
+    public function publishDraft(int $versionId, int $actor): void
+    {
+        if ($versionId <= 0 || $actor <= 0) {
+            throw new \InvalidArgumentException('Versión o usuario inválido.');
+        }
+        $this->db->beginTransaction();
+        try {
+            $q = $this->db->prepare(
+                'SELECT v.*, st.codigo AS estado_codigo FROM esquema_evaluacion_versiones v '
+                . 'JOIN estados_esquema_evaluacion st ON st.id=v.estado_esquema_id '
+                . 'WHERE v.id=? FOR UPDATE'
+            );
+            $q->execute([$versionId]);
+            $version = $q->fetch(PDO::FETCH_ASSOC);
+            if (!$version || $version['estado_codigo'] !== 'BORRADOR') {
+                throw new \RuntimeException('Solo se pueden publicar versiones en BORRADOR.');
+            }
+            // Bloquear el esquema padre para serializar publicaciones concurrentes.
+            $q = $this->db->prepare('SELECT id FROM esquemas_evaluacion WHERE id=? AND deleted_at IS NULL FOR UPDATE');
+            $q->execute([(int)$version['esquema_evaluacion_id']]);
+            if (!$q->fetchColumn()) throw new \RuntimeException('El esquema no está disponible.');
+
+            $q = $this->db->prepare('SELECT id,codigo,activo,ponderacion_nota_final FROM parciales_evaluacion WHERE esquema_version_id=? FOR UPDATE');
+            $q->execute([$versionId]);
+            $partials = $q->fetchAll(PDO::FETCH_ASSOC);
+            $active = array_values(array_filter($partials, static fn($p) => (int)$p['activo'] === 1));
+            if (count($active) !== 2) throw new \RuntimeException('Deben existir exactamente dos parciales activos: P1 y P2.');
+            $codes = [];
+            foreach ($active as $partial) {
+                $code = strtoupper(trim((string)$partial['codigo']));
+                if (!in_array($code, ['P1','P2'], true) || isset($codes[$code]) || abs((float)$partial['ponderacion_nota_final'] - 50.0) > 0.001) {
+                    throw new \RuntimeException('P1 y P2 deben tener una ponderación de 50 % cada uno.');
+                }
+                $codes[$code] = true;
+                $q = $this->db->prepare('SELECT activo,ponderacion_parcial FROM parametros_evaluacion WHERE parcial_id=? FOR UPDATE');
+                $q->execute([(int)$partial['id']]);
+                $params = array_values(array_filter($q->fetchAll(PDO::FETCH_ASSOC), static fn($p) => (int)$p['activo'] === 1));
+                $sum = array_sum(array_map(static fn($p) => (float)$p['ponderacion_parcial'], $params));
+                if (!$params || abs($sum - 100.0) > 0.001) {
+                    throw new \RuntimeException('Los parámetros activos de cada parcial deben sumar exactamente 100 %.');
+                }
+            }
+            $q = $this->db->query("SELECT id,codigo FROM estados_esquema_evaluacion WHERE codigo IN ('PUBLICADO','HISTORICO') AND activo=1 FOR UPDATE");
+            $states = [];
+            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $state) $states[$state['codigo']] = (int)$state['id'];
+            if (empty($states['PUBLICADO']) || empty($states['HISTORICO'])) throw new \RuntimeException('Faltan estados PUBLICADO o HISTORICO.');
+
+            // No se permite retroceder la vigencia respecto de una versión ya publicada.
+            $q = $this->db->prepare('SELECT v.id,v.vigente_desde FROM esquema_evaluacion_versiones v '
+                . 'JOIN estados_esquema_evaluacion st ON st.id=v.estado_esquema_id '
+                . "WHERE v.esquema_evaluacion_id=? AND st.codigo='PUBLICADO' AND v.id<>? FOR UPDATE");
+            $q->execute([(int)$version['esquema_evaluacion_id'], $versionId]);
+            $previous = $q->fetchAll(PDO::FETCH_ASSOC);
+            if (count($previous) > 1) throw new \RuntimeException('Existen varias versiones publicadas; revisar antes de continuar.');
+            $start = (string)$version['vigente_desde'];
+            if ($previous) {
+                if ($start <= (string)$previous[0]['vigente_desde']) {
+                    throw new \RuntimeException('La nueva vigencia debe ser posterior al inicio de la versión publicada.');
+                }
+                $end = (new \DateTimeImmutable($start))->modify('-1 day')->format('Y-m-d');
+                $q = $this->db->prepare('UPDATE esquema_evaluacion_versiones SET estado_esquema_id=?, vigente_hasta=? WHERE id=?');
+                $q->execute([$states['HISTORICO'], $end, (int)$previous[0]['id']]);
+            }
+            $q = $this->db->prepare('UPDATE esquema_evaluacion_versiones SET estado_esquema_id=?, publicado_por_usuario_id=?, fecha_publicacion=NOW(), vigente_hasta=NULL WHERE id=?');
+            $q->execute([$states['PUBLICADO'], $actor, $versionId]);
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            throw $e;
+        }
+    }
+
 }
