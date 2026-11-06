@@ -98,6 +98,9 @@ $router->get(
 // v0.11.38 - Evaluación: diagnóstico de esquemas (solo lectura)
 $router->get('/admin/academico/evaluacion', [\App\Controllers\Admin\EvaluationController::class, 'index']);
 $router->get('/admin/academico/evaluacion/ver', [\App\Controllers\Admin\EvaluationController::class, 'show']);
+$router->get('/admin/academico/evaluacion/borrador', [\App\Controllers\Admin\EvaluationController::class, 'cloneForm']);
+$router->post('/admin/academico/evaluacion/borrador/save', [\App\Controllers\Admin\EvaluationController::class, 'cloneSave']);
+$router->post('/admin/academico/evaluacion/ponderaciones/save', [\App\Controllers\Admin\EvaluationController::class, 'weightsSave']);
 
 // Talento Humano v0.5.0
 $router->get(

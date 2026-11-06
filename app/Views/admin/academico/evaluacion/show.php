@@ -11,3 +11,15 @@ foreach($active as $p){if((int)$p['parametros']===0 || abs((float)$p['total_para
 <?php foreach($partials as $p): $params=array_values(array_filter($parameters,static fn($x)=>(int)$x['parcial_id']===(int)$p['id'])); $ok=count($params)>0 && abs((float)$p['total_parametros']-100)<0.001; ?>
 <section class="card"><div class="section-head"><div><span class="eyebrow">PARCIAL <?=$h($p['codigo'])?></span><h2><?=$h($p['nombre'])?></h2></div></div><p>Peso en nota final: <strong><?=$h($p['ponderacion_nota_final'])?> %</strong> · Parámetros activos: <?=$h($p['total_parametros'])?> % · <?=$ok?'Correcto':'Revisar'?> · <?=$p['activo']?'Activo':'Inactivo'?></p><div class="table-scroll"><table><thead><tr><th>Parámetro</th><th>Código</th><th>Ponderación</th><th>Estado</th></tr></thead><tbody><?php foreach($params as $param):?><tr><td><?=$h($param['nombre'])?></td><td><?=$h($param['codigo'])?></td><td><?=$h($param['ponderacion_parcial'])?> %</td><td><?=$param['activo']?'Activo':'Inactivo'?></td></tr><?php endforeach;if(!$params):?><tr><td colspan="4">No existen parámetros para este parcial.</td></tr><?php endif;?></tbody></table></div></section>
 <?php endforeach;if(!$partials):?><section class="card"><p>Esta versión todavía no tiene parciales configurados.</p></section><?php endif;?>
+
+<?php if ((int)$version['es_publicado']===0 && $version['estado_codigo']==='BORRADOR'): ?>
+<section class="card"><div class="section-head"><h2>Editar ponderaciones del borrador</h2></div>
+<p>Las versiones publicadas no se pueden modificar. La publicación requerirá ponderaciones completas; aquí puedes guardar un borrador incompleto.</p>
+<form method="post" action="<?=$h($u)?>/admin/academico/evaluacion/ponderaciones/save">
+<input type="hidden" name="_csrf" value="<?=$h(\App\Core\Csrf::token())?>"><input type="hidden" name="id" value="<?=(int)$version['id']?>">
+<h3>Parciales</h3>
+<?php foreach ($partials as $p): ?><label style="display:block;margin:12px 0"><?=$h($p['codigo'])?> · <?=$h($p['nombre'])?> <input type="number" min="0.01" max="100" step="0.01" required name="parciales[<?=(int)$p['id']?>]" value="<?=$h($p['ponderacion_nota_final'])?>"> %</label><?php endforeach; ?>
+<h3>Parámetros</h3>
+<?php foreach ($parameters as $pa): ?><label style="display:block;margin:12px 0"><?=$h($pa['codigo'])?> · <?=$h($pa['nombre'])?> <input type="number" min="0.01" max="100" step="0.01" required name="parametros[<?=(int)$pa['id']?>]" value="<?=$h($pa['ponderacion_parcial'])?>"> %</label><?php endforeach; ?>
+<button type="submit" class="btn btn-primary">Guardar ponderaciones del borrador</button></form></section>
+<?php endif; ?>
