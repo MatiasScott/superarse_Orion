@@ -17,13 +17,32 @@ foreach($active as $p){if((int)$p['parametros']===0 || abs((float)$p['total_para
 
 <?php if ($version['estado_codigo']==='BORRADOR'): ?>
 <section class="card"><div class="section-head"><h2>Configurar parámetros del borrador</h2></div>
-<p>Crea y edita parámetros libremente. Para prácticas o vinculación puedes reemplazar los parámetros <strong>solo de este borrador</strong> con una plantilla de evaluación única. Esta acción no modifica secciones ni notas.</p>
+<p>Administra parciales y parámetros. Se permiten borradores incompletos, pero nunca aumentos que superen el 100 %. Para prácticas o vinculación puedes reemplazar los parámetros <strong>solo de este borrador</strong> con una plantilla de evaluación única. Esta acción no modifica secciones ni notas.</p>
 <form method="post" action="<?=$h($u)?>/admin/academico/evaluacion/configurar/save" onsubmit="return confirm('¿Reemplazar los parciales y parámetros de ESTE BORRADOR?');">
 <input type="hidden" name="_csrf" value="<?=$h(\App\Core\Csrf::token())?>"><input type="hidden" name="id" value="<?=(int)$version['id']?>"><input type="hidden" name="operacion" value="plantilla">
 <label>Plantilla <select name="tipo" required><option value="PRACTICAS">Prácticas: Tutor Empresarial 50 % + Tutor Académico 50 %</option><option value="VINCULACION">Vinculación / Servicio Comunitario: Nota Aprobatoria 100 %</option></select></label>
 <button class="btn" type="submit">Aplicar plantilla al borrador</button></form>
+<h3>Parciales del esquema</h3>
+<p>Porcentaje utilizado: <strong><?=$h(number_format($total,2))?> %</strong> · Disponible: <strong><?=$h(number_format(max(0,100-$total),2))?> %</strong>. Los parciales nuevos se agregan al borrador; los publicados no cambian.</p>
+<?php foreach($partials as $partial): ?>
+<form method="post" action="<?=$h($u)?>/admin/academico/evaluacion/configurar/save" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:8px 0">
+<input type="hidden" name="_csrf" value="<?=$h(\App\Core\Csrf::token())?>"><input type="hidden" name="id" value="<?=(int)$version['id']?>"><input type="hidden" name="parcial_id" value="<?=(int)$partial['id']?>">
+<label>Nombre del parcial <input name="nombre" maxlength="120" required value="<?=$h($partial['nombre'])?>"></label>
+<label>Código <input name="codigo" maxlength="40" required value="<?=$h($partial['codigo'])?>"></label>
+<label>Peso en nota final % <input type="number" name="ponderacion" min="0.01" max="100" step="0.01" required value="<?=$h($partial['ponderacion_nota_final'])?>" style="width:90px"></label>
+<button class="btn" name="operacion" value="parcial_guardar">Guardar parcial</button>
+<button class="btn" name="operacion" value="parcial_estado" formnovalidate><?=$partial['activo']?'Desactivar':'Activar'?></button>
+</form>
+<?php endforeach; ?>
+<form method="post" action="<?=$h($u)?>/admin/academico/evaluacion/configurar/save" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:12px 0">
+<input type="hidden" name="_csrf" value="<?=$h(\App\Core\Csrf::token())?>"><input type="hidden" name="id" value="<?=(int)$version['id']?>">
+<label>Nuevo parcial <input name="nombre" maxlength="120" required placeholder="Nombre del parcial"></label>
+<label>Código <input name="codigo" maxlength="40" required placeholder="P3"></label>
+<label>Peso % <input type="number" name="ponderacion" min="0.01" max="100" step="0.01" required value="<?=$h(number_format(max(0,100-$total),2,'.',''))?>" style="width:90px"></label>
+<button class="btn btn-primary" name="operacion" value="parcial_guardar">Crear parcial</button>
+</form>
 <?php foreach($partials as $p): ?>
-<h3><?=$h($p['nombre'])?> — <?=$h($p['ponderacion_nota_final'])?> %</h3>
+<h3><?=$h($p['nombre'])?> — <?=$h($p['ponderacion_nota_final'])?> %</h3><p>Parámetros activos: <strong><?=$h(number_format((float)$p['total_parametros'],2))?> %</strong> · Disponible: <strong><?=$h(number_format(max(0,100-(float)$p['total_parametros']),2))?> %</strong>.</p>
 <?php foreach($parameters as $pa): if((int)$pa['parcial_id']!==(int)$p['id'])continue; ?>
 <form method="post" action="<?=$h($u)?>/admin/academico/evaluacion/configurar/save" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:8px 0">
 <input type="hidden" name="_csrf" value="<?=$h(\App\Core\Csrf::token())?>"><input type="hidden" name="id" value="<?=(int)$version['id']?>"><input type="hidden" name="parcial_id" value="<?=(int)$p['id']?>"><input type="hidden" name="parametro_id" value="<?=(int)$pa['id']?>">
@@ -43,18 +62,6 @@ foreach($active as $p){if((int)$p['parametros']===0 || abs((float)$p['total_para
 </form>
 <?php endforeach; ?>
 </section>
-<?php endif; ?>
-
-<?php if ((int)$version['es_publicado']===0 && $version['estado_codigo']==='BORRADOR'): ?>
-<section class="card"><div class="section-head"><h2>Editar ponderaciones del borrador</h2></div>
-<p>Las versiones publicadas no se pueden modificar. La publicación requerirá ponderaciones completas; aquí puedes guardar un borrador incompleto.</p>
-<form method="post" action="<?=$h($u)?>/admin/academico/evaluacion/ponderaciones/save">
-<input type="hidden" name="_csrf" value="<?=$h(\App\Core\Csrf::token())?>"><input type="hidden" name="id" value="<?=(int)$version['id']?>">
-<h3>Parciales</h3>
-<?php foreach ($partials as $p): ?><label style="display:block;margin:12px 0"><?=$h($p['codigo'])?> · <?=$h($p['nombre'])?> <input type="number" min="0.01" max="100" step="0.01" required name="parciales[<?=(int)$p['id']?>]" value="<?=$h($p['ponderacion_nota_final'])?>"> %</label><?php endforeach; ?>
-<h3>Parámetros</h3>
-<?php foreach ($parameters as $pa): ?><label style="display:block;margin:12px 0"><?=$h($pa['codigo'])?> · <?=$h($pa['nombre'])?> <input type="number" min="0.01" max="100" step="0.01" required name="parametros[<?=(int)$pa['id']?>]" value="<?=$h($pa['ponderacion_parcial'])?>"> %</label><?php endforeach; ?>
-<button type="submit" class="btn btn-primary">Guardar ponderaciones del borrador</button></form></section>
 <?php endif; ?>
 
 <?php if ($version['estado_codigo']==='BORRADOR'): ?>

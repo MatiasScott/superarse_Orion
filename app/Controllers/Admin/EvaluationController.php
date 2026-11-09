@@ -115,7 +115,7 @@ final class EvaluationController
         try {
             $id=$this->repo()->cloneDraft((int)$r->input('id'),(string)$r->input('nombre_version'),(string)$r->input('vigente_desde'));
         } catch (\InvalidArgumentException|\RuntimeException $e) {
-            Response::abort(422,$e->getMessage());
+            Session::set('evaluacion_error',$e->getMessage());
         }
         Response::redirect('/admin/academico/evaluacion/ver?id='.$id);
     }
@@ -128,7 +128,7 @@ final class EvaluationController
         try {
             $this->repo()->updateDraftWeights($id,(array)$r->input('parciales',[]),(array)$r->input('parametros',[]));
         } catch (\InvalidArgumentException|\RuntimeException $e) {
-            Response::abort(422,$e->getMessage());
+            Session::set('evaluacion_error',$e->getMessage());
         }
         Response::redirect('/admin/academico/evaluacion/ver?id='.$id);
     }

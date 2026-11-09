@@ -261,8 +261,28 @@ final class EvaluationRepository
             $q=$this->db->prepare("SELECT v.id FROM esquema_evaluacion_versiones v JOIN estados_esquema_evaluacion st ON st.id=v.estado_esquema_id WHERE v.id=? AND st.codigo='BORRADOR' AND st.permite_edicion=1 AND st.es_publicado=0 FOR UPDATE");
             $q->execute([$versionId]);
             if (!$q->fetchColumn()) throw new \RuntimeException('Solo se pueden configurar versiones en borrador.');
+            $before=$this->draftTotals($versionId);
             $partialId=(int)($data['parcial_id']??0);
-            if ($operation==='plantilla') {
+            if ($operation==='parcial_guardar') {
+                $name=trim((string)($data['nombre']??''));
+                $code=strtoupper(trim((string)($data['codigo']??'')));
+                $weight=(string)($data['ponderacion']??'');
+                if ($name==='' || mb_strlen($name)>120 || !preg_match('/^[A-Z0-9_]{2,40}$/D',$code) || !preg_match('/^\d{1,3}(?:\.\d{1,2})?$/D',$weight) || (float)$weight<=0 || (float)$weight>100) throw new \InvalidArgumentException('Nombre, código o ponderación de parcial inválidos.');
+                if ($partialId>0) {
+                    $q=$this->db->prepare('UPDATE parciales_evaluacion SET nombre=?,codigo=?,ponderacion_nota_final=? WHERE id=? AND esquema_version_id=?');
+                    $q->execute([$name,$code,$weight,$partialId,$versionId]);
+                    $q=$this->db->prepare('SELECT id FROM parciales_evaluacion WHERE id=? AND esquema_version_id=?');$q->execute([$partialId,$versionId]);
+                    if (!$q->fetchColumn()) throw new \InvalidArgumentException('Parcial inexistente.');
+                } else {
+                    $q=$this->db->prepare('SELECT COALESCE(MAX(orden_visual),0)+1 FROM parciales_evaluacion WHERE esquema_version_id=?');$q->execute([$versionId]);$order=(int)$q->fetchColumn();
+                    $q=$this->db->prepare('INSERT INTO parciales_evaluacion (esquema_version_id,codigo,nombre,ponderacion_nota_final,orden_visual,activo) VALUES (?,?,?,?,?,1)');
+                    $q->execute([$versionId,$code,$name,$weight,$order]);
+                }
+            } elseif ($operation==='parcial_estado') {
+                $q=$this->db->prepare('UPDATE parciales_evaluacion SET activo=IF(activo=1,0,1) WHERE id=? AND esquema_version_id=?');
+                $q->execute([$partialId,$versionId]);
+                if (!$q->rowCount()) throw new \InvalidArgumentException('Parcial inexistente.');
+            } elseif ($operation==='plantilla') {
                 $type=(string)($data['tipo']??'');
                 $templates=[
                     'PRACTICAS'=>[['NOTA_TUTOR_EMPRESARIAL','NOTA TUTOR EMPRESARIAL',50],['NOTA_TUTOR_ACADEMICO','NOTA TUTOR ACADÉMICO',50]],
@@ -302,8 +322,35 @@ final class EvaluationRepository
                     if (!$q->rowCount())throw new \RuntimeException('Parámetro inexistente.');
                 } else throw new \InvalidArgumentException('Operación desconocida.');
             }
+            $this->assertDraftTotals($before,$this->draftTotals($versionId));
             $this->db->commit();
         } catch (\Throwable $e) {if($this->db->inTransaction())$this->db->rollBack();throw $e;}
+    }
+
+    /** Totales activos, expresados en centésimas para evitar errores de coma flotante. */
+    private function draftTotals(int $versionId): array
+    {
+        $q=$this->db->prepare('SELECT id,activo,ponderacion_nota_final FROM parciales_evaluacion WHERE esquema_version_id=? FOR UPDATE');
+        $q->execute([$versionId]);$rows=$q->fetchAll(PDO::FETCH_ASSOC);
+        $totals=['parciales'=>0];
+        foreach($rows as $p){
+            if ((int)$p['activo']===1) $totals['parciales']+=(int)round((float)$p['ponderacion_nota_final']*100);
+            $q=$this->db->prepare('SELECT COALESCE(SUM(CASE WHEN activo=1 THEN ponderacion_parcial ELSE 0 END),0) FROM parametros_evaluacion WHERE parcial_id=?');
+            $q->execute([(int)$p['id']]);
+            $totals['parametro_'.(int)$p['id']]=(int)round((float)$q->fetchColumn()*100);
+        }
+        return $totals;
+    }
+
+    /** Nunca permite crear un exceso ni agravar uno ya existente; sí permite corregirlo. */
+    private function assertDraftTotals(array $before,array $after): void
+    {
+        foreach($after as $key=>$total){
+            if($total>10000 && $total>=($before[$key]??0)){
+                $scope=$key==='parciales'?'los parciales':'los parámetros del parcial';
+                throw new \InvalidArgumentException('La suma de '.$scope.' no puede superar el 100 %. Total resultante: '.number_format($total/100,2,'.','').' %. Reduzca o desactive otra ponderación primero.');
+            }
+        }
     }
 
     /** Modifica exclusivamente las ponderaciones de un borrador editable. */
@@ -337,12 +384,14 @@ final class EvaluationRepository
                 if (count($out)!==count($ids)) throw new \InvalidArgumentException('Se deben enviar todas las ponderaciones de la versión.');
                 return $out;
             };
+            $before=$this->draftTotals($versionId);
             $pw=$normalize($partialWeights,$partialIds);
             $aw=$normalize($parameterWeights,$paramIds);
             $u=$this->db->prepare('UPDATE parciales_evaluacion SET ponderacion_nota_final=? WHERE id=?');
             foreach($pw as $id=>$weight) $u->execute([$weight,$id]);
             $u=$this->db->prepare('UPDATE parametros_evaluacion SET ponderacion_parcial=? WHERE id=?');
             foreach($aw as $id=>$weight) $u->execute([$weight,$id]);
+            $this->assertDraftTotals($before,$this->draftTotals($versionId));
             $this->db->commit();
         } catch (\Throwable $e) {
             if ($this->db->inTransaction()) $this->db->rollBack();
