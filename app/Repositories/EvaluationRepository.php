@@ -251,6 +251,61 @@ final class EvaluationRepository
         }
     }
 
+
+    /** Configura parámetros exclusivamente en una versión BORRADOR; no modifica notas. */
+    public function configureDraft(int $versionId, string $operation, array $data): void
+    {
+        if ($versionId <= 0) throw new \InvalidArgumentException('Versión inválida.');
+        $this->db->beginTransaction();
+        try {
+            $q=$this->db->prepare("SELECT v.id FROM esquema_evaluacion_versiones v JOIN estados_esquema_evaluacion st ON st.id=v.estado_esquema_id WHERE v.id=? AND st.codigo='BORRADOR' AND st.permite_edicion=1 AND st.es_publicado=0 FOR UPDATE");
+            $q->execute([$versionId]);
+            if (!$q->fetchColumn()) throw new \RuntimeException('Solo se pueden configurar versiones en borrador.');
+            $partialId=(int)($data['parcial_id']??0);
+            if ($operation==='plantilla') {
+                $type=(string)($data['tipo']??'');
+                $templates=[
+                    'PRACTICAS'=>[['NOTA_TUTOR_EMPRESARIAL','NOTA TUTOR EMPRESARIAL',50],['NOTA_TUTOR_ACADEMICO','NOTA TUTOR ACADÉMICO',50]],
+                    'VINCULACION'=>[['NOTA_APROBATORIA','Nota Aprobatoria',100]],
+                ];
+                if (!isset($templates[$type])) throw new \InvalidArgumentException('Plantilla no válida.');
+                $q=$this->db->prepare('SELECT COUNT(*) FROM seccion_esquema_evaluacion WHERE esquema_version_id=?');$q->execute([$versionId]);
+                if ((int)$q->fetchColumn()>0) throw new \RuntimeException('No se puede sustituir una versión asignada a secciones.');
+                // Borrador aislado: crear el nuevo parcial antes de eliminar los anteriores.
+                $q=$this->db->prepare('SELECT id FROM parciales_evaluacion WHERE esquema_version_id=? FOR UPDATE');$q->execute([$versionId]);$oldIds=array_map('intval',$q->fetchAll(PDO::FETCH_COLUMN));
+                $q=$this->db->prepare('DELETE FROM parametros_evaluacion WHERE parcial_id=?');
+                foreach($oldIds as $id)$q->execute([$id]);
+                $q=$this->db->prepare('DELETE FROM parciales_evaluacion WHERE id=?');foreach($oldIds as $id)$q->execute([$id]);
+                $q=$this->db->prepare('INSERT INTO parciales_evaluacion (esquema_version_id,codigo,nombre,ponderacion_nota_final,orden_visual,activo) VALUES (?,?,?,?,?,1)');
+                $q->execute([$versionId,'UNICO','EVALUACIÓN ÚNICA',100,1]);$partialId=(int)$this->db->lastInsertId();
+                $q=$this->db->prepare('INSERT INTO parametros_evaluacion (parcial_id,codigo,nombre,ponderacion_parcial,orden_visual,modificable_al_evaluar,activo) VALUES (?,?,?,?,?,0,1)');
+                foreach($templates[$type] as $i=>$row)$q->execute([$partialId,$row[0],$row[1],$row[2],$i+1]);
+            } else {
+                $q=$this->db->prepare('SELECT id FROM parciales_evaluacion WHERE id=? AND esquema_version_id=? FOR UPDATE');$q->execute([$partialId,$versionId]);
+                if (!$q->fetchColumn()) throw new \InvalidArgumentException('Parcial ajeno a la versión.');
+                $id=(int)($data['parametro_id']??0);
+                if ($operation==='guardar') {
+                    $name=trim((string)($data['nombre']??''));
+                    $code=strtoupper(trim((string)($data['codigo']??'')));
+                    $weight=(string)($data['ponderacion']??'');
+                    if ($name==='' || mb_strlen($name)>220 || !preg_match('/^[A-Z0-9_]{2,100}$/D',$code) || !preg_match('/^\d{1,3}(?:\.\d{1,2})?$/D',$weight) || (float)$weight<=0 || (float)$weight>100) throw new \InvalidArgumentException('Nombre, código o ponderación inválidos.');
+                    if ($id>0) {
+                        $q=$this->db->prepare('UPDATE parametros_evaluacion SET nombre=?,codigo=?,ponderacion_parcial=? WHERE id=? AND parcial_id=?');
+                        $q->execute([$name,$code,$weight,$id,$partialId]);
+                        if (!$q->rowCount()) { $q=$this->db->prepare('SELECT id FROM parametros_evaluacion WHERE id=? AND parcial_id=?');$q->execute([$id,$partialId]);if (!$q->fetchColumn())throw new \RuntimeException('Parámetro inexistente.'); }
+                    } else {
+                        $q=$this->db->prepare('SELECT COALESCE(MAX(orden_visual),0)+1 FROM parametros_evaluacion WHERE parcial_id=?');$q->execute([$partialId]);$order=(int)$q->fetchColumn();
+                        $q=$this->db->prepare('INSERT INTO parametros_evaluacion (parcial_id,codigo,nombre,ponderacion_parcial,orden_visual,modificable_al_evaluar,activo) VALUES (?,?,?,?,?,0,1)');$q->execute([$partialId,$code,$name,$weight,$order]);
+                    }
+                } elseif ($operation==='estado') {
+                    $q=$this->db->prepare('UPDATE parametros_evaluacion SET activo=IF(activo=1,0,1) WHERE id=? AND parcial_id=?');$q->execute([$id,$partialId]);
+                    if (!$q->rowCount())throw new \RuntimeException('Parámetro inexistente.');
+                } else throw new \InvalidArgumentException('Operación desconocida.');
+            }
+            $this->db->commit();
+        } catch (\Throwable $e) {if($this->db->inTransaction())$this->db->rollBack();throw $e;}
+    }
+
     /** Modifica exclusivamente las ponderaciones de un borrador editable. */
     public function updateDraftWeights(int $versionId, array $partialWeights, array $parameterWeights): void
     {
@@ -322,11 +377,12 @@ final class EvaluationRepository
             $q->execute([$versionId]);
             $partials = $q->fetchAll(PDO::FETCH_ASSOC);
             $active = array_values(array_filter($partials, static fn($p) => (int)$p['activo'] === 1));
-            if (count($active) !== 2) throw new \RuntimeException('Deben existir exactamente dos parciales activos: P1 y P2.');
+            $single=count($active)===1 && strtoupper(trim((string)$active[0]['codigo']))==='UNICO' && abs((float)$active[0]['ponderacion_nota_final']-100)<0.001;
+            if (!$single && count($active)!==2) throw new \RuntimeException('Se requiere P1/P2 al 50 % o evaluación única al 100 %.');
             $codes = [];
             foreach ($active as $partial) {
                 $code = strtoupper(trim((string)$partial['codigo']));
-                if (!in_array($code, ['P1','P2'], true) || isset($codes[$code]) || abs((float)$partial['ponderacion_nota_final'] - 50.0) > 0.001) {
+                if (!$single && (!in_array($code, ['P1','P2'], true) || isset($codes[$code]) || abs((float)$partial['ponderacion_nota_final'] - 50.0) > 0.001)) {
                     throw new \RuntimeException('P1 y P2 deben tener una ponderación de 50 % cada uno.');
                 }
                 $codes[$code] = true;

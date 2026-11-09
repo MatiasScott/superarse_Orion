@@ -103,6 +103,7 @@ $router->get('/admin/academico/evaluacion', [\App\Controllers\Admin\EvaluationCo
 $router->get('/admin/academico/evaluacion/ver', [\App\Controllers\Admin\EvaluationController::class, 'show']);
 $router->get('/admin/academico/evaluacion/borrador', [\App\Controllers\Admin\EvaluationController::class, 'cloneForm']);
 $router->post('/admin/academico/evaluacion/borrador/save', [\App\Controllers\Admin\EvaluationController::class, 'cloneSave']);
+$router->post('/admin/academico/evaluacion/configurar/save', [\App\Controllers\Admin\EvaluationController::class, 'configureSave']);
 $router->post('/admin/academico/evaluacion/ponderaciones/save', [\App\Controllers\Admin\EvaluationController::class, 'weightsSave']);
 $router->post('/admin/academico/evaluacion/publicar/save', [\App\Controllers\Admin\EvaluationController::class, 'publishSave']);
 

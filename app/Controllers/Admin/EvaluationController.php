@@ -133,6 +133,24 @@ final class EvaluationController
         Response::redirect('/admin/academico/evaluacion/ver?id='.$id);
     }
 
+    public function configureSave(Request $r): never
+    {
+        if (!Csrf::validate((string)$r->input('_csrf'))) Response::abort(419,'CSRF inválido.');
+        AccessService::require('academico.oferta.gestionar');
+        $id=(int)$r->input('id');
+        try {
+            $this->repo()->configureDraft($id,(string)$r->input('operacion'),[
+                'tipo'=>$r->input('tipo'), 'parcial_id'=>$r->input('parcial_id'),
+                'parametro_id'=>$r->input('parametro_id'), 'nombre'=>$r->input('nombre'),
+                'codigo'=>$r->input('codigo'), 'ponderacion'=>$r->input('ponderacion'),
+            ]);
+            Session::set('evaluacion_notice','Configuración del borrador guardada.');
+        } catch (\InvalidArgumentException|\RuntimeException|\PDOException $e) {
+            Session::set('evaluacion_error',$e instanceof \PDOException?'No se pudo guardar: verifica que el código sea único y no existan dependencias.':$e->getMessage());
+        }
+        Response::redirect('/admin/academico/evaluacion/ver?id='.$id);
+    }
+
     public function publishSave(Request $r): never
     {
         if (!Csrf::validate((string)$r->input('_csrf'))) Response::abort(419,'CSRF inválido.');
