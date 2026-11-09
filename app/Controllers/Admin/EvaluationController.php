@@ -23,6 +23,7 @@ final class EvaluationController
             'title'=>'Esquemas por sección',
             'sections'=>$repo->sectionAssignments(),
             'versions'=>$repo->assignableVersions(),
+            'canReassign'=>array_reduce((array)Session::get('roles',[]),static fn(bool $ok,array $role):bool=>$ok || in_array(strtoupper((string)($role['codigo']??'')),['TIC','TICS','COORD_TICS','COORDINADOR_TICS','COORDINADOR_TIC','ADMIN_TICS','ADMIN_TIC','SOPORTE_TICS','SOPORTE_TIC'],true),false),
         ]);
     }
 
@@ -37,6 +38,35 @@ final class EvaluationController
             );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             Response::abort(422,$e->getMessage());
+        }
+        Response::redirect('/admin/academico/evaluacion/secciones');
+    }
+
+    private function requireTics(): void
+    {
+        AccessService::requireAuth();
+        $roles=(array)Session::get('roles', []);
+        $allowed=false;
+        foreach ($roles as $role) {
+            $code=strtoupper((string)($role['codigo'] ?? ''));
+            if (in_array($code, ['TIC','TICS','COORD_TICS','COORDINADOR_TICS','COORDINADOR_TIC','ADMIN_TICS','ADMIN_TIC','SOPORTE_TICS','SOPORTE_TIC'], true)) {
+                $allowed=true;
+                break;
+            }
+        }
+        if (!$allowed) Response::abort(403, 'Solo el personal TICs puede reasignar esquemas.');
+    }
+
+    public function reassignSection(Request $r): never
+    {
+        if (!Csrf::validate((string)$r->input('_csrf'))) Response::abort(419,'CSRF inválido.');
+        $this->requireTics();
+        try {
+            $this->repo()->reassignVersionToSection((int)$r->input('seccion_id'),(int)$r->input('esquema_version_id'),
+                (int)(Session::get('auth_user')['id'] ?? 0),trim((string)$r->input('motivo')));
+            Session::set('evaluacion_notice','Reasignación autorizada y registrada en el historial.');
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            Session::set('evaluacion_error',$e->getMessage());
         }
         Response::redirect('/admin/academico/evaluacion/secciones');
     }
@@ -63,6 +93,7 @@ final class EvaluationController
             'version'=>$version,
             'partials'=>$repo->partials($id),
             'parameters'=>$repo->parameters($id),
+            'publicationMinimum'=>$repo->publicationMinimum((int)$version['esquema_evaluacion_id'],$id),
         ]);
     }
 
@@ -111,8 +142,10 @@ final class EvaluationController
         try {
             $this->repo()->publishDraft($id, $actor);
         } catch (\InvalidArgumentException|\RuntimeException $e) {
-            Response::abort(422, $e->getMessage());
+            Session::set('evaluacion_error',$e->getMessage());
+            Response::redirect('/admin/academico/evaluacion/ver?id='.$id);
         }
+        Session::set('evaluacion_notice','Versión publicada correctamente.');
         Response::redirect('/admin/academico/evaluacion/ver?id='.$id);
     }
 

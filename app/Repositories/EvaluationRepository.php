@@ -99,6 +99,41 @@ final class EvaluationRepository
         }
     }
 
+    /** Reasignación excepcional TICs: denegar ante cualquier evidencia académica o vinculación. */
+    public function reassignVersionToSection(int $sectionId,int $versionId,int $actor,string $reason): void
+    {
+        if ($sectionId<=0 || $versionId<=0 || $actor<=0 || mb_strlen($reason)<15 || mb_strlen($reason)>1000) {
+            throw new \InvalidArgumentException('Sección, versión o usuario inválido; el motivo debe tener entre 15 y 1000 caracteres.');
+        }
+        $this->db->beginTransaction();
+        try {
+            $q=$this->db->prepare('SELECT s.id,s.activo,s.deleted_at,o.activo AS oferta_activa FROM secciones s JOIN ofertas_academicas o ON o.id=s.oferta_academica_id WHERE s.id=? FOR UPDATE');
+            $q->execute([$sectionId]); $section=$q->fetch(PDO::FETCH_ASSOC);
+            if (!$section || (int)$section['activo']!==1 || $section['deleted_at']!==null || (int)$section['oferta_activa']!==1) throw new \RuntimeException('La sección u oferta no está activa.');
+            $q=$this->db->prepare('SELECT id,esquema_version_id FROM seccion_esquema_evaluacion WHERE seccion_id=? FOR UPDATE');
+            $q->execute([$sectionId]); $old=$q->fetch(PDO::FETCH_ASSOC);
+            if (!$old) throw new \RuntimeException('La sección no tiene una asignación previa.');
+            if ((int)$old['esquema_version_id']===$versionId) throw new \RuntimeException('La versión seleccionada ya está asignada.');
+            $q=$this->db->prepare("SELECT v.id FROM esquema_evaluacion_versiones v JOIN estados_esquema_evaluacion st ON st.id=v.estado_esquema_id JOIN esquemas_evaluacion e ON e.id=v.esquema_evaluacion_id WHERE v.id=? AND st.codigo='PUBLICADO' AND st.activo=1 AND e.activo=1 AND e.deleted_at IS NULL AND v.vigente_desde<=CURDATE() AND (v.vigente_hasta IS NULL OR v.vigente_hasta>=CURDATE()) FOR UPDATE");
+            $q->execute([$versionId]); if (!$q->fetchColumn()) throw new \RuntimeException('La nueva versión debe estar publicada y vigente hoy.');
+            // Política conservadora: bloquear incluso ante recursos creados, vínculos, notas o cierres.
+            $checks=[
+                'SELECT 1 FROM recursos_evaluables WHERE seccion_id=? LIMIT 1',
+                'SELECT 1 FROM recurso_parametro_evaluacion WHERE seccion_id=? LIMIT 1',
+                'SELECT 1 FROM calificaciones_recursos cr JOIN recursos_evaluables r ON r.id=cr.recurso_id WHERE r.seccion_id=? LIMIT 1',
+                'SELECT 1 FROM resultados_parciales_estudiante rp JOIN matricula_asignaturas ma ON ma.id=rp.matricula_asignatura_id WHERE ma.seccion_id=? LIMIT 1',
+                'SELECT 1 FROM resultados_finales_asignatura rf JOIN matricula_asignaturas ma ON ma.id=rf.matricula_asignatura_id WHERE ma.seccion_id=? LIMIT 1',
+                'SELECT 1 FROM cierre_parcial_seccion WHERE seccion_id=? LIMIT 1',
+            ];
+            foreach($checks as $sql){$q=$this->db->prepare($sql);$q->execute([$sectionId]);if($q->fetchColumn())throw new \RuntimeException('Reasignación bloqueada: existen recursos, vinculaciones, calificaciones, resultados o cierres académicos.');}
+            $q=$this->db->prepare('INSERT INTO historial_reasignacion_esquema_tics (seccion_id,asignacion_id,version_anterior_id,version_nueva_id,usuario_tics_id,motivo) VALUES (?,?,?,?,?,?)');
+            $q->execute([$sectionId,(int)$old['id'],(int)$old['esquema_version_id'],$versionId,$actor,$reason]);
+            $q=$this->db->prepare('UPDATE seccion_esquema_evaluacion SET esquema_version_id=?,asignado_por_usuario_id=?,fecha_asignacion=NOW(),bloqueado=1,fecha_bloqueo=NOW(),observacion=? WHERE id=?');
+            $q->execute([$versionId,$actor,'Reasignación excepcional TICs. Consultar historial de auditoría.',(int)$old['id']]);
+            $this->db->commit();
+        }catch(\Throwable $e){if($this->db->inTransaction())$this->db->rollBack();throw $e;}
+    }
+
     public function versions(): array
     {
         return $this->db->query(
@@ -129,6 +164,13 @@ final class EvaluationRepository
         );
         $s->execute(['id'=>$id]);
         return $s->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    public function publicationMinimum(int $schemaId,int $excludeId): ?string
+    {
+        $q=$this->db->prepare("SELECT MAX(v.vigente_desde) FROM esquema_evaluacion_versiones v JOIN estados_esquema_evaluacion st ON st.id=v.estado_esquema_id WHERE v.esquema_evaluacion_id=? AND v.id<>? AND st.codigo='PUBLICADO'");
+        $q->execute([$schemaId,$excludeId]);$date=$q->fetchColumn();
+        return $date ? (new \DateTimeImmutable((string)$date))->modify('+1 day')->format('Y-m-d') : null;
     }
 
     public function partials(int $versionId): array
